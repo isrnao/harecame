@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import { EventDashboard } from '../EventDashboard';
 import type { EventClient } from '@/types';
 
@@ -11,6 +12,7 @@ const mockEvent: EventClient = {
   participationCode: 'ABC123',
   youtubeStreamUrl: 'https://youtube.com/watch?v=test',
   youtubeVideoId: 'test-video-id',
+  livekitRoomName: 'test-room',
   scheduledAt: new Date('2025-07-20T10:00:00Z'),
   createdAt: new Date('2025-07-19T10:00:00Z'),
   updatedAt: new Date('2025-07-19T10:00:00Z'),
@@ -74,14 +76,15 @@ describe('EventDashboard', () => {
   it('should show loading state when refreshing data', async () => {
     render(<EventDashboard event={mockEvent} />);
     
-    const refreshButton = screen.getByRole('button', { name: /更新/ });
+    const refreshButtons = screen.getAllByRole('button', { name: /更新/ });
+    const refreshButton = refreshButtons[0]; // 最初の更新ボタンを使用
     
     // 更新ボタンをクリック
     fireEvent.click(refreshButton);
     
     // ローディング状態を確認
     expect(refreshButton).toBeDisabled();
-    expect(screen.getByText(/更新中/)).toBeInTheDocument();
+    expect(screen.getAllByText(/更新中/)[0]).toBeInTheDocument();
     
     // ローディングが完了するまで待機
     await waitFor(() => {
@@ -92,7 +95,8 @@ describe('EventDashboard', () => {
   it('should prevent duplicate refresh requests', async () => {
     render(<EventDashboard event={mockEvent} />);
     
-    const refreshButton = screen.getByRole('button', { name: /更新/ });
+    const refreshButtons = screen.getAllByRole('button', { name: /更新/ });
+    const refreshButton = refreshButtons[0]; // 最初の更新ボタンを使用
     
     // 連続でクリック
     fireEvent.click(refreshButton);
@@ -117,7 +121,8 @@ describe('EventDashboard', () => {
 
     render(<EventDashboard event={mockEvent} />);
     
-    const refreshButton = screen.getByRole('button', { name: /更新/ });
+    const refreshButtons = screen.getAllByRole('button', { name: /更新/ });
+    const refreshButton = refreshButtons[0]; // 最初の更新ボタンを使用
     fireEvent.click(refreshButton);
     
     // エラーメッセージが表示されることを確認

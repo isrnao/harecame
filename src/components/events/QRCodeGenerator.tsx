@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import QRCode from 'qrcode';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -89,10 +90,14 @@ export function QRCodeGenerator({ event }: QRCodeGeneratorProps) {
             </div>
           ) : qrCodeDataUrl ? (
             <div className="p-4 bg-white rounded-lg border">
-              <img
+              <Image
                 src={qrCodeDataUrl}
-                alt={`QR Code for ${event.title}`}
+                alt={`${event.title}イベントの参加用QRコード - 参加コード: ${event.participationCode}`}
+                width={256}
+                height={256}
                 className="w-64 h-64"
+                unoptimized={true}
+                priority={true}
               />
             </div>
           ) : (

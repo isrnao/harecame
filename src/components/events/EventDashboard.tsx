@@ -206,7 +206,7 @@ export function EventDashboard({
       )}
 
       {/* Stream Notifications */}
-      <StreamNotifications cameras={cameras} eventId={event.id} />
+      <StreamNotifications cameras={cameras} />
 
       {/* Header - モバイル最適化 */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">

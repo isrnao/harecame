@@ -1,19 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
-  CheckCircle, 
   AlertCircle, 
   Info, 
   X, 
   ArrowRight,
   Video,
-  VideoOff,
-  Wifi,
-  WifiOff
+  VideoOff
 } from 'lucide-react';
 import type { CameraConnectionClient } from '@/types';
 
@@ -31,17 +28,18 @@ interface StreamNotification {
 
 interface StreamNotificationsProps {
   cameras: CameraConnectionClient[];
-  eventId: string;
 }
 
-export function StreamNotifications({ cameras, eventId }: StreamNotificationsProps) {
+export function StreamNotifications({ cameras }: StreamNotificationsProps) {
   const [notifications, setNotifications] = useState<StreamNotification[]>([]);
-  const [previousCameras, setPreviousCameras] = useState<CameraConnectionClient[]>([]);
+  const previousCamerasRef = useRef<CameraConnectionClient[]>([]);
 
   // Monitor camera changes and generate notifications
   useEffect(() => {
+    const previousCameras = previousCamerasRef.current;
+    
     if (previousCameras.length === 0) {
-      setPreviousCameras(cameras);
+      previousCamerasRef.current = cameras;
       return;
     }
 
@@ -126,8 +124,8 @@ export function StreamNotifications({ cameras, eventId }: StreamNotificationsPro
       setNotifications(prev => [...newNotifications, ...prev].slice(0, 10)); // Keep last 10 notifications
     }
 
-    setPreviousCameras(cameras);
-  }, [cameras]); // previousCamerasを依存関係から削除
+    previousCamerasRef.current = cameras;
+  }, [cameras]);
 
   // Auto-hide notifications after 5 seconds
   useEffect(() => {

@@ -38,10 +38,14 @@ interface StreamSwitchEvent {
 }
 
 export function StreamManagementPanel({ 
-  eventId, 
+  eventId: _eventId, 
   cameras, 
-  streamStatus
+  streamStatus: _streamStatus
 }: StreamManagementPanelProps) {
+  // eventId と streamStatus は将来の機能拡張のために保持
+  // 現在は未使用だが、ストリーム状態の詳細管理で使用予定
+  void _eventId; // 未使用パラメータを明示的に処理
+  void _streamStatus; // 未使用パラメータを明示的に処理
   const [activeCamera, setActiveCamera] = useState<CameraConnectionClient | null>(null);
   const [switchHistory, setSwitchHistory] = useState<StreamSwitchEvent[]>([]);
   const [isStandby, setIsStandby] = useState(false);
@@ -239,14 +243,14 @@ export function StreamManagementPanel({
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    {getDeviceIcon(camera.deviceInfo.platform)}
+                    {getDeviceIcon(camera.deviceInfo?.platform || 'unknown')}
                     <div>
                       <div className="font-medium">
                         {camera.participantName || camera.participantId}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {camera.streamQuality.resolution || 'N/A'} • 
-                        {camera.streamQuality.frameRate || 'N/A'} fps
+                        {camera.streamQuality?.resolution || 'N/A'} • 
+                        {camera.streamQuality?.frameRate || 'N/A'} fps
                       </div>
                     </div>
                   </div>

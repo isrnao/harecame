@@ -33,6 +33,20 @@ const nextConfig: NextConfig = {
   images: {
     formats: ['image/webp', 'image/avif'],
     minimumCacheTTL: 60,
+    // Allow data URLs for QR codes and other dynamically generated images
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    // Configure domains for external images if needed
+    domains: [],
+    // Configure remote patterns for external images
+    remotePatterns: [
+      // Add patterns for external image sources if needed in the future
+    ],
+    // Device sizes for responsive images
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    // Image sizes for different breakpoints
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   
   // Enable TypeScript strict mode

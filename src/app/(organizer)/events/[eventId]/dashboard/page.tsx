@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: DashboardPageProps): Promise<
       title: `${event.title} - ダッシュボード | Harecame`,
       description: `${event.title}のライブ配信ダッシュボード`,
     };
-  } catch (error) {
+  } catch {
     return {
       title: 'エラー - Harecame',
     };
@@ -53,6 +53,15 @@ export default async function EventDashboardPage({ params }: DashboardPageProps)
     ]);
   } catch (error) {
     console.error('Failed to load dashboard data:', error);
+    // エラーの詳細をログに記録
+    if (error instanceof Error) {
+      console.error('Dashboard error details:', {
+        message: error.message,
+        stack: error.stack,
+        eventId,
+        timestamp: new Date().toISOString(),
+      });
+    }
     notFound();
   }
 

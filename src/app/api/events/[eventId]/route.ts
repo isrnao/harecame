@@ -4,13 +4,13 @@ import {
   CameraConnectionService,
   StreamStatusService,
 } from "@/lib/database";
+import { requireEventAccess } from "@/lib/auth";
 import {
   rateLimit,
   validateRequestBody,
   withErrorHandling,
   requestLogger,
   securityHeaders,
-  requireAuth,
   RATE_LIMITS,
 } from "@/lib/middleware";
 import { updateEventSchema } from "@/lib/validation";
@@ -103,11 +103,11 @@ export const PUT = withErrorHandling(
     const rateLimitResult = await rateLimit(RATE_LIMITS.default)(request);
     if (rateLimitResult) return rateLimitResult;
 
-    // Require authentication for updates
-    const authResult = requireAuth(request);
-    if (authResult) return authResult;
-
     const { eventId } = await context.params;
+
+    // Require event-specific authentication for updates
+    const authResult = await requireEventAccess(eventId, ['admin', 'organizer'])(request);
+    if (authResult instanceof Response) return authResult;
 
     // Validate UUID format
     if (!isValidUUID(eventId)) {
@@ -171,11 +171,11 @@ export const DELETE = withErrorHandling(
     const rateLimitResult = await rateLimit(RATE_LIMITS.default)(request);
     if (rateLimitResult) return rateLimitResult;
 
-    // Require authentication for deletion
-    const authResult = requireAuth(request);
-    if (authResult) return authResult;
-
     const { eventId } = await context.params;
+
+    // Require event-specific authentication for deletion
+    const authResult = await requireEventAccess(eventId, ['admin', 'organizer'])(request);
+    if (authResult instanceof Response) return authResult;
 
     // Validate UUID format
     if (!isValidUUID(eventId)) {

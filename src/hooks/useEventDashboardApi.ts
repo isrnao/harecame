@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { getYouTubeStreamStats, type YouTubeStreamStats } from '@/lib/youtube';
-import type { EventClient, CameraConnectionClient, StreamStatusClient } from '@/types';
+import type { CameraConnectionClient, StreamStatusClient } from '@/types';
 
 interface FetchDataOptions {
   eventId: string;

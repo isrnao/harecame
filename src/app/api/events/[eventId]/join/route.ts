@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { EventService, CameraConnectionService, EventLogService } from '@/lib/database';
 import { generateAccessToken } from '@/lib/livekit';
+import { AuthService } from '@/lib/auth';
 import { 
   rateLimit, 
   validateRequestBody, 
@@ -37,11 +38,27 @@ export const POST = withErrorHandling(async (
     );
   }
 
+  // Check camera access authentication
+  const cameraAccess = await AuthService.hasCameraAccess(request, eventId);
+  if (!cameraAccess.hasAccess) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Camera access authentication required. Please validate participation code first.',
+      },
+      { status: 401, headers: securityHeaders() }
+    );
+  }
+
   // Validate request body
   const bodyValidation = await validateRequestBody(joinEventSchema)(request);
   if (bodyValidation instanceof NextResponse) return bodyValidation;
   
   const { participantId, participantName, deviceInfo } = bodyValidation.data;
+
+  // Use authenticated participant info if available
+  const authenticatedParticipantId = cameraAccess.participantId || participantId;
+  const authenticatedParticipantName = cameraAccess.participantName || participantName;
 
   // Get event information
   const event = await EventService.getById(eventId);
@@ -69,7 +86,7 @@ export const POST = withErrorHandling(async (
   // Check if participant is already connected
   const existingCameras = await CameraConnectionService.getByEventId(eventId);
   const existingConnection = existingCameras.find(
-    camera => camera.participantId === participantId && camera.status !== 'inactive'
+    camera => camera.participantId === authenticatedParticipantId && camera.status !== 'inactive'
   );
 
   if (existingConnection) {
@@ -100,8 +117,8 @@ export const POST = withErrorHandling(async (
   // Create camera connection record
   const cameraConnection = await CameraConnectionService.create({
     eventId,
-    participantId,
-    participantName,
+    participantId: authenticatedParticipantId,
+    participantName: authenticatedParticipantName,
     deviceInfo: deviceInfo || {},
   });
 
@@ -110,13 +127,13 @@ export const POST = withErrorHandling(async (
   try {
     roomToken = await generateAccessToken(
       event.livekitRoomName,
-      participantId,
+      authenticatedParticipantId,
       {
         canPublish: true,
         canSubscribe: true,
         canPublishData: true,
         metadata: JSON.stringify({
-          participantName: participantName || participantId,
+          participantName: authenticatedParticipantName || authenticatedParticipantId,
           cameraConnectionId: cameraConnection.id,
         }),
       }
@@ -139,10 +156,10 @@ export const POST = withErrorHandling(async (
   // Create and handle camera joined event
   const cameraJoinedEvent = createCameraJoinedEvent(
     eventId,
-    participantId,
+    authenticatedParticipantId,
     cameraConnection.id,
     {
-      participantName,
+      participantName: authenticatedParticipantName,
       deviceInfo: deviceInfo || {},
     }
   );
@@ -157,9 +174,9 @@ export const POST = withErrorHandling(async (
     eventId,
     cameraConnectionId: cameraConnection.id,
     logType: 'camera_join_request',
-    message: `Camera operator ${participantId} requested to join`,
+    message: `Camera operator ${authenticatedParticipantId} requested to join`,
     metadata: {
-      participantName,
+      participantName: authenticatedParticipantName,
       deviceInfo,
       userAgent: request.headers.get('user-agent'),
       ip: request.headers.get('x-forwarded-for') || 'unknown',
