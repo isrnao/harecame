@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AuthService } from '@/lib/auth';
+import { AuthService, type JWTPayload } from '@/lib/auth';
 
 // Protected routes configuration
 const PROTECTED_ROUTES = {
@@ -161,8 +161,11 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+// Route type definition for better type safety
+type RouteType = 'admin' | 'organizer' | 'camera' | 'public';
+
 // Determine route type based on pathname and method
-function getRouteType(pathname: string, method: string): 'admin' | 'organizer' | 'camera' | 'public' {
+function getRouteType(pathname: string, method: string): RouteType {
   // Admin routes
   if (pathname === '/api/events' && method === 'POST') return 'admin';
   if (pathname.match(/^\/api\/events\/[^/]+$/) && (method === 'PUT' || method === 'DELETE')) return 'admin';
@@ -182,10 +185,10 @@ function getRouteType(pathname: string, method: string): 'admin' | 'organizer' |
 
 // Check if user has access to specific route
 async function checkRouteAccess(
-  routeType: string,
-  payload: any,
+  routeType: RouteType,
+  payload: JWTPayload,
   pathname: string,
-  request: NextRequest
+  _request: NextRequest // Prefixed with _ to indicate intentionally unused
 ): Promise<boolean> {
   switch (routeType) {
     case 'admin':

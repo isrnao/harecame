@@ -653,51 +653,47 @@ export function CameraStreamInterface({
   }, [isConnected, cameraConnectionId, updateCameraStatus]);
 
   // Cleanup on unmount
+  const cleanupResources = useCallback(() => {
+    // アンマウント時のクリーンアップ
+    console.log("Component unmounting, cleaning up resources");
+
+    // メディアトラックの停止
+    if (localVideoTrack.current) {
+      localVideoTrack.current.stop();
+    }
+    if (localAudioTrack.current) {
+      localAudioTrack.current.stop();
+    }
+
+    // ビデオ要素のクリア
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    // Roomからの切断（接続状態をチェック）
+    if (room && room.state !== ConnectionState.Disconnected) {
+      room.disconnect().catch((error) => {
+        console.error("Error during cleanup disconnect:", error);
+      });
+    }
+
+    // リソース監視のクリーンアップ
+    const cleanup = (
+      window as unknown as {
+        harecameCleanup?: { connection: () => void; stream: () => void };
+      }
+    ).harecameCleanup;
+    if (cleanup) {
+      cleanup.connection();
+      cleanup.stream();
+      delete (window as unknown as { harecameCleanup?: unknown })
+        .harecameCleanup;
+    }
+  }, [room]);
+
   useEffect(() => {
-    // ref値をキャプチャしてクリーンアップ関数で安全に使用
-    const videoElement = videoRef.current;
-    const localVideo = localVideoTrack.current;
-    const localAudio = localAudioTrack.current;
-    const roomInstance = room;
-
-    return () => {
-      // アンマウント時のクリーンアップ
-      console.log("Component unmounting, cleaning up resources");
-
-      // メディアトラックの停止（キャプチャした値を使用）
-      if (localVideo) {
-        localVideo.stop();
-      }
-      if (localAudio) {
-        localAudio.stop();
-      }
-
-      // ビデオ要素のクリア（キャプチャした値を使用）
-      if (videoElement) {
-        videoElement.srcObject = null;
-      }
-
-      // Roomからの切断（接続状態をチェック）
-      if (roomInstance && roomInstance.state !== ConnectionState.Disconnected) {
-        roomInstance.disconnect().catch((error) => {
-          console.error("Error during cleanup disconnect:", error);
-        });
-      }
-
-      // リソース監視のクリーンアップ
-      const cleanup = (
-        window as unknown as {
-          harecameCleanup?: { connection: () => void; stream: () => void };
-        }
-      ).harecameCleanup;
-      if (cleanup) {
-        cleanup.connection();
-        cleanup.stream();
-        delete (window as unknown as { harecameCleanup?: unknown })
-          .harecameCleanup;
-      }
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- roomはuseStateで作成され、コンポーネントライフサイクル中に変更されないため
+    return cleanupResources;
+  }, [cleanupResources]);
 
   // カメラ権限エラーの場合は専用コンポーネントを表示
   if (

@@ -3,10 +3,64 @@ import { NextRequest, NextResponse } from 'next/server';
 import { EventService } from './database';
 import type { EventClient } from '@/types';
 
-// JWT configuration
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-change-in-production'
-);
+// JWT Secret validation and security
+export class JWTSecurityValidator {
+  private static readonly DEFAULT_SECRET = 'your-secret-key-change-in-production';
+  
+  /**
+   * Validate JWT_SECRET environment variable based on environment
+   */
+  static validateJWTSecret(): string {
+    const jwtSecret = process.env.JWT_SECRET?.trim();
+    const environment = process.env.NODE_ENV || 'development';
+    
+    // 本番環境でJWT_SECRETが未設定または空の場合はエラーを投げる
+    if (environment === 'production' && (!jwtSecret || jwtSecret.length === 0)) {
+      throw new Error(
+        'JWT_SECRET environment variable must be set in production. ' +
+        'This is a critical security requirement.'
+      );
+    }
+    
+    // 本番環境でデフォルト値が使用されている場合もエラー
+    if (environment === 'production' && jwtSecret === this.DEFAULT_SECRET) {
+      throw new Error(
+        'JWT_SECRET cannot use the default value in production. ' +
+        'Please set a secure, randomly generated secret.'
+      );
+    }
+    
+    // 開発環境でJWT_SECRETが未設定の場合は警告を出力
+    if (environment === 'development' && !jwtSecret) {
+      console.warn(
+        '⚠️  JWT_SECRET environment variable is not set. Using default value for development. ' +
+        'Please set JWT_SECRET in your .env.local file for better security.'
+      );
+      return this.DEFAULT_SECRET;
+    }
+    
+    // 開発環境でデフォルト値が明示的に設定されている場合も警告
+    if (environment === 'development' && jwtSecret === this.DEFAULT_SECRET) {
+      console.warn(
+        '⚠️  JWT_SECRET is using the default value. ' +
+        'Consider setting a unique secret in your .env.local file.'
+      );
+    }
+    
+    return jwtSecret || this.DEFAULT_SECRET;
+  }
+  
+  /**
+   * Get validated JWT secret as TextEncoder
+   */
+  static getEncodedSecret(): Uint8Array {
+    const secret = this.validateJWTSecret();
+    return new TextEncoder().encode(secret);
+  }
+}
+
+// JWT configuration with security validation
+const JWT_SECRET = JWTSecurityValidator.getEncodedSecret();
 const JWT_ISSUER = 'harecame-app';
 const JWT_AUDIENCE = 'harecame-users';
 
@@ -236,14 +290,59 @@ export class AuthService {
 
   /**
    * Generate LiveKit access token for camera streaming
+   * 
+   * ⚠️ **MOCK IMPLEMENTATION WARNING** ⚠️
+   * This is currently a placeholder implementation that does NOT integrate with LiveKit.
+   * It generates a JWT token using the application's secret instead of LiveKit's API.
+   * 
+   * For production use, this method should be replaced with proper LiveKit token generation:
+   * - Install @livekit/server-sdk
+   * - Use AccessToken class from LiveKit SDK
+   * - Configure with proper LiveKit API key and secret
+   * - Set appropriate room permissions and metadata
+   * 
+   * @param participantId - Unique identifier for the participant
+   * @param eventId - Event ID to create room name
+   * @param participantName - Optional display name for the participant
+   * @returns Promise<string> - JWT token (currently mock implementation)
+   * 
+   * @example
+   * ```typescript
+   * // Current mock implementation - DO NOT USE IN PRODUCTION
+   * const token = await AuthService.generateLiveKitToken('user123', 'event456', 'John Doe');
+   * 
+   * // Proper LiveKit implementation should be:
+   * // import { AccessToken } from '@livekit/server-sdk';
+   * // const token = new AccessToken(apiKey, apiSecret, { identity: participantId });
+   * // token.addGrant({ room: `event-${eventId}`, roomJoin: true, canPublish: true });
+   * // return await token.toJwt();
+   * ```
    */
   static async generateLiveKitToken(
     participantId: string,
     eventId: string,
     participantName?: string
   ): Promise<string> {
-    // This would integrate with LiveKit's JWT token generation
-    // For now, we'll return a placeholder
+    const environment = process.env.NODE_ENV || 'development';
+    
+    // 本番環境での使用時に警告を出力
+    if (environment === 'production') {
+      console.error(
+        '🚨 CRITICAL: LiveKit token generation is using MOCK IMPLEMENTATION in production! ' +
+        'This will NOT work with actual LiveKit servers. ' +
+        'Please implement proper LiveKit token generation using @livekit/server-sdk before deploying to production.'
+      );
+    } else {
+      console.warn(
+        '⚠️  LiveKit token generation is using mock implementation. ' +
+        'This is a placeholder that generates a JWT token using the application secret instead of LiveKit API. ' +
+        'For actual LiveKit integration, implement proper token generation using @livekit/server-sdk.'
+      );
+    }
+    
+    // MOCK IMPLEMENTATION - This does NOT integrate with LiveKit
+    // This is a placeholder that generates a JWT token using the application's secret
+    // instead of LiveKit's proper token generation process
     const payload = {
       sub: participantId,
       room: `event-${eventId}`,
@@ -255,6 +354,9 @@ export class AuthService {
       },
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + (2 * 60 * 60), // 2 hours
+      // Mock implementation marker
+      mockImplementation: true,
+      warning: 'This token is generated by mock implementation and will not work with LiveKit servers'
     };
 
     return await new SignJWT(payload)

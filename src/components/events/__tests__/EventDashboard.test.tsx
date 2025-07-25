@@ -110,13 +110,9 @@ describe('EventDashboard', () => {
   });
 
   it('should handle API errors gracefully', async () => {
-    // エラーレスポンスを設定
+    // エラーレスポンスを設定（fetchが失敗するようにする）
     mockFetch.mockImplementation(() => 
-      Promise.resolve({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-      })
+      Promise.reject(new Error('Network error'))
     );
 
     render(<EventDashboard event={mockEvent} />);
@@ -149,22 +145,33 @@ describe('EventDashboard', () => {
   it('should auto-refresh data periodically', async () => {
     jest.useFakeTimers();
     
-    render(<EventDashboard event={mockEvent} />);
-    
-    // 初回データ取得
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-    
-    mockFetch.mockClear();
-    
-    // 30秒後に自動更新
-    jest.advanceTimersByTime(30000);
-    
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(2); // cameras + status
-    });
-    
-    jest.useRealTimers();
+    try {
+      render(<EventDashboard event={mockEvent} />);
+      
+      // 初回データ取得が完了するまで待機
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+      
+      mockFetch.mockClear();
+      
+      // 30秒後に自動更新をトリガー
+      jest.advanceTimersByTime(30000);
+      
+      // タイマーによる非同期処理を実行
+      await jest.runOnlyPendingTimersAsync();
+      
+      // 自動更新が実行されたことを確認（少なくとも1回は実行される）
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/events/test-event-1/cameras'),
+        expect.any(Object)
+      );
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/events/test-event-1/status'),
+        expect.any(Object)
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

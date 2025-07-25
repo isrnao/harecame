@@ -155,13 +155,13 @@ export function StreamManagementPanel({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  {getDeviceIcon(activeCamera.deviceInfo.platform)}
+                  {getDeviceIcon(activeCamera.deviceInfo?.platform)}
                   <div>
                     <h3 className="font-semibold">
                       {activeCamera.participantName || activeCamera.participantId}
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      {activeCamera.deviceInfo.platform} • {activeCamera.deviceInfo.browser}
+                      {activeCamera.deviceInfo?.platform || 'Unknown'} • {activeCamera.deviceInfo?.browser || 'Unknown'}
                     </p>
                   </div>
                 </div>
@@ -172,7 +172,7 @@ export function StreamManagementPanel({
               </div>
 
               {/* Stream Quality Info */}
-              {activeCamera.streamQuality.resolution && (
+              {activeCamera.streamQuality?.resolution && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted rounded-lg">
                   <div>
                     <span className="text-xs text-muted-foreground">解像度</span>

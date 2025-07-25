@@ -18,6 +18,41 @@ global.Response = class Response {
   }
 };
 
+// Mock Request for Node.js environment
+global.Request = class Request {
+  constructor(input, init) {
+    this.url = typeof input === 'string' ? input : input.url;
+    this.method = init?.method || 'GET';
+    this.headers = new Map(Object.entries(init?.headers || {}));
+    this.body = init?.body || null;
+  }
+};
+
+// Mock NextRequest and NextResponse
+jest.mock('next/server', () => ({
+  NextRequest: class NextRequest {
+    constructor(input, init) {
+      this.url = typeof input === 'string' ? input : input.url;
+      this.method = init?.method || 'GET';
+      this.headers = new Map(Object.entries(init?.headers || {}));
+      this.body = init?.body || null;
+    }
+    
+    get(name) {
+      return this.headers.get(name);
+    }
+  },
+  NextResponse: {
+    json: (data, init) => new Response(JSON.stringify(data), {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...init?.headers,
+      },
+    }),
+  },
+}));
+
 // Mock environment variables for testing
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
