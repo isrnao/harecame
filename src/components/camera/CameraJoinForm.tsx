@@ -208,13 +208,36 @@ export function CameraJoinForm({
         eventId: state.eventId,
         roomToken: state.roomToken ? 'present' : 'missing',
         roomName: state.roomName || 'empty',
-        cameraConnectionId: state.cameraConnectionId || 'missing'
+        cameraConnectionId: state.cameraConnectionId || 'missing',
+        authToken: state.authToken ? 'present' : 'missing',
+        liveKitToken: state.liveKitToken ? 'present' : 'missing'
       });
+
+      // Store authentication tokens in localStorage for persistent auth
+      if (state.authToken) {
+        localStorage.setItem("harecame-token", state.authToken);
+        
+        // Store user auth data
+        const authUser = {
+          id: state.cameraConnectionId || `camera-${Date.now()}`,
+          type: 'camera',
+          eventId: state.eventId,
+          participantName: document.querySelector<HTMLInputElement>('#participantName')?.value,
+          token: state.authToken,
+          expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(), // 8 hours
+        };
+        localStorage.setItem("harecame-auth", JSON.stringify(authUser));
+      }
 
       // Store room information in sessionStorage for the camera interface
       sessionStorage.setItem("harecame_room_token", state.roomToken);
       sessionStorage.setItem("harecame_room_name", state.roomName || "");
       sessionStorage.setItem("harecame_event_id", state.eventId);
+      
+      // Store LiveKit token if available
+      if (state.liveKitToken) {
+        sessionStorage.setItem("harecame_livekit_token", state.liveKitToken);
+      }
       
       // Store camera connection ID
       if (state.cameraConnectionId) {
@@ -232,7 +255,7 @@ export function CameraJoinForm({
       // Redirect to camera interface
       router.push(`/camera/${state.eventId}`);
     }
-  }, [state.success, state.eventId, state.roomToken, state.roomName, state.cameraConnectionId, router]);
+  }, [state.success, state.eventId, state.roomToken, state.roomName, state.cameraConnectionId, state.authToken, state.liveKitToken, router]);
 
   return (
     <Card className="w-full max-w-md mx-auto">

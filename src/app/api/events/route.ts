@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { EventService } from '@/lib/database';
 import { createYouTubeLiveStream } from '@/lib/youtube';
+import { AuthService } from '@/lib/auth';
 import { 
   rateLimit, 
   validateRequestBody, 
@@ -46,13 +47,25 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   );
 });
 
-// POST /api/events - Create new event
+// POST /api/events - Create new event (requires admin authentication)
 export const POST = withErrorHandling(async (request: NextRequest) => {
   // Apply middleware
   requestLogger(request);
   
   const rateLimitResult = await rateLimit(RATE_LIMITS.createEvent)(request);
   if (rateLimitResult) return rateLimitResult;
+
+  // Check admin authentication
+  const hasAdminAccess = await AuthService.hasAdminAccess(request);
+  if (!hasAdminAccess) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Admin authentication required to create events',
+      },
+      { status: 401 }
+    );
+  }
 
   // Validate request body
   const bodyValidation = await validateRequestBody(createEventSchema)(request);
@@ -66,6 +79,10 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     description,
     scheduledAt: scheduledAt ? new Date(scheduledAt) : undefined,
   });
+
+  // Generate organizer token for the event creator
+  const organizerId = `organizer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const organizerToken = await AuthService.generateOrganizerToken(organizerId, event.id);
 
   // Create YouTube Live stream
   try {
@@ -86,7 +103,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     return NextResponse.json(
       {
         success: true,
-        data: updatedEvent,
+        data: {
+          event: updatedEvent,
+          organizer: {
+            id: organizerId,
+            token: organizerToken,
+          },
+        },
         message: 'Event created successfully with YouTube integration',
       },
       { 
@@ -101,7 +124,13 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     return NextResponse.json(
       {
         success: true,
-        data: event,
+        data: {
+          event,
+          organizer: {
+            id: organizerId,
+            token: organizerToken,
+          },
+        },
         warning: 'Event created but YouTube integration failed',
         message: 'Event created successfully (YouTube integration failed)',
       },

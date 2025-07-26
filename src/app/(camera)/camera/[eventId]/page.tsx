@@ -24,7 +24,7 @@ export async function generateMetadata({
       title: `${event.title} - カメラ配信 | Harecame`,
       description: `${event.title}にカメラオペレーターとして参加`,
     };
-  } catch (error) {
+  } catch {
     return {
       title: "エラー - Harecame",
     };
@@ -51,6 +51,14 @@ export default async function CameraStreamPage({
     }
   } catch (error) {
     console.error("Failed to load event:", error);
+    // エラーの詳細をログに記録
+    if (error instanceof Error) {
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        eventId,
+      });
+    }
     notFound();
   }
 

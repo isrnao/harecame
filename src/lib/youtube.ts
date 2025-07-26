@@ -101,7 +101,8 @@ export async function stopYouTubeLiveStream(streamId: string): Promise<void> {
 
 // Get YouTube Live stream status and stats
 export async function getYouTubeStreamStats(
-  videoId: string
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _videoId: string
 ): Promise<YouTubeStreamStats> {
   if (!hasYouTubeConfig) {
     // Mock stats for development
@@ -137,7 +138,8 @@ export async function getYouTubeStreamStats(
 
 // Get YouTube Live stream status
 export async function getYouTubeLiveStreamStatus(
-  streamId: string
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _streamId: string
 ): Promise<YouTubeLiveStream['status']> {
   if (!hasYouTubeConfig) {
     return Math.random() > 0.5 ? 'live' : 'created';

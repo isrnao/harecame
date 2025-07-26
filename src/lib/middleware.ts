@@ -128,7 +128,7 @@ export function validateRequestBody<T>(schema: z.ZodSchema<T>) {
       }
       
       return { data: result.data };
-    } catch (error) {
+    } catch {
       return NextResponse.json(
         {
           success: false,

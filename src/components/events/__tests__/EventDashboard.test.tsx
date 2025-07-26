@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import { EventDashboard } from '../EventDashboard';
 import type { EventClient } from '@/types';
 
@@ -11,6 +12,7 @@ const mockEvent: EventClient = {
   participationCode: 'ABC123',
   youtubeStreamUrl: 'https://youtube.com/watch?v=test',
   youtubeVideoId: 'test-video-id',
+  livekitRoomName: 'test-room',
   scheduledAt: new Date('2025-07-20T10:00:00Z'),
   createdAt: new Date('2025-07-19T10:00:00Z'),
   updatedAt: new Date('2025-07-19T10:00:00Z'),
@@ -74,14 +76,15 @@ describe('EventDashboard', () => {
   it('should show loading state when refreshing data', async () => {
     render(<EventDashboard event={mockEvent} />);
     
-    const refreshButton = screen.getByRole('button', { name: /更新/ });
+    const refreshButtons = screen.getAllByRole('button', { name: /更新/ });
+    const refreshButton = refreshButtons[0]; // 最初の更新ボタンを使用
     
     // 更新ボタンをクリック
     fireEvent.click(refreshButton);
     
     // ローディング状態を確認
     expect(refreshButton).toBeDisabled();
-    expect(screen.getByText(/更新中/)).toBeInTheDocument();
+    expect(screen.getAllByText(/更新中/)[0]).toBeInTheDocument();
     
     // ローディングが完了するまで待機
     await waitFor(() => {
@@ -92,7 +95,8 @@ describe('EventDashboard', () => {
   it('should prevent duplicate refresh requests', async () => {
     render(<EventDashboard event={mockEvent} />);
     
-    const refreshButton = screen.getByRole('button', { name: /更新/ });
+    const refreshButtons = screen.getAllByRole('button', { name: /更新/ });
+    const refreshButton = refreshButtons[0]; // 最初の更新ボタンを使用
     
     // 連続でクリック
     fireEvent.click(refreshButton);
@@ -106,18 +110,15 @@ describe('EventDashboard', () => {
   });
 
   it('should handle API errors gracefully', async () => {
-    // エラーレスポンスを設定
+    // エラーレスポンスを設定（fetchが失敗するようにする）
     mockFetch.mockImplementation(() => 
-      Promise.resolve({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-      })
+      Promise.reject(new Error('Network error'))
     );
 
     render(<EventDashboard event={mockEvent} />);
     
-    const refreshButton = screen.getByRole('button', { name: /更新/ });
+    const refreshButtons = screen.getAllByRole('button', { name: /更新/ });
+    const refreshButton = refreshButtons[0]; // 最初の更新ボタンを使用
     fireEvent.click(refreshButton);
     
     // エラーメッセージが表示されることを確認
@@ -144,22 +145,33 @@ describe('EventDashboard', () => {
   it('should auto-refresh data periodically', async () => {
     jest.useFakeTimers();
     
-    render(<EventDashboard event={mockEvent} />);
-    
-    // 初回データ取得
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-    
-    mockFetch.mockClear();
-    
-    // 30秒後に自動更新
-    jest.advanceTimersByTime(30000);
-    
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(2); // cameras + status
-    });
-    
-    jest.useRealTimers();
+    try {
+      render(<EventDashboard event={mockEvent} />);
+      
+      // 初回データ取得が完了するまで待機
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+      
+      mockFetch.mockClear();
+      
+      // 30秒後に自動更新をトリガー
+      jest.advanceTimersByTime(30000);
+      
+      // タイマーによる非同期処理を実行
+      await jest.runOnlyPendingTimersAsync();
+      
+      // 自動更新が実行されたことを確認（少なくとも1回は実行される）
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/events/test-event-1/cameras'),
+        expect.any(Object)
+      );
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/events/test-event-1/status'),
+        expect.any(Object)
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

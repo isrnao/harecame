@@ -1,8 +1,8 @@
 'use server';
 
-
 import { EventService, CameraConnectionService } from '@/lib/database';
 import { generateAccessToken } from '@/lib/livekit';
+import { AuthService } from '@/lib/auth';
 import { z } from 'zod';
 
 // Form validation schema
@@ -34,6 +34,8 @@ export type CameraJoinState = {
   roomToken?: string;
   roomName?: string;
   cameraConnectionId?: string;
+  authToken?: string;
+  liveKitToken?: string;
 };
 
 export async function joinCameraAction(
@@ -118,8 +120,27 @@ export async function joinCameraAction(
     });
     console.log('Camera connection created:', cameraConnection.id);
 
+    // Generate authentication token for camera operator
+    let authToken: string;
+    try {
+      console.log('Generating camera authentication token...');
+      authToken = await AuthService.generateCameraToken(
+        participantId,
+        event.id,
+        participantName || undefined
+      );
+      console.log('Camera authentication token generated successfully');
+    } catch (error) {
+      console.error('Failed to generate camera authentication token:', error);
+      return {
+        success: false,
+        message: '認証トークンの生成に失敗しました。もう一度お試しください。',
+      };
+    }
+
     // Generate LiveKit access token
     let roomToken: string;
+    let liveKitToken: string;
     try {
       console.log('Generating LiveKit token for room:', event.livekitRoomName);
       roomToken = await generateAccessToken(
@@ -135,7 +156,15 @@ export async function joinCameraAction(
           }),
         }
       );
-      console.log('LiveKit token generated successfully');
+      
+      // Generate additional LiveKit token using AuthService
+      liveKitToken = await AuthService.generateLiveKitToken(
+        participantId,
+        event.id,
+        participantName || undefined
+      );
+      
+      console.log('LiveKit tokens generated successfully');
     } catch (error) {
       console.error('Failed to generate LiveKit token:', error);
       return {
@@ -152,6 +181,8 @@ export async function joinCameraAction(
       roomToken,
       roomName: event.livekitRoomName,
       cameraConnectionId: cameraConnection.id,
+      authToken,
+      liveKitToken,
     };
   } catch (error) {
     console.error('Failed to join camera:', error);

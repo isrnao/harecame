@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,6 @@ import {
   SignalHigh,
   SignalMedium,
   SignalLow,
-  User,
   Clock,
   Settings
 } from 'lucide-react';
@@ -36,10 +35,10 @@ export function CameraStatusGrid({
 }: CameraStatusGridProps) {
   const [cameras, setCameras] = useState<CameraConnectionClient[]>(initialCameras);
   const [selectedCamera, setSelectedCamera] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsLoading] = useState(false);
 
   // Refresh camera data
-  const refreshCameras = async () => {
+  const refreshCameras = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`/api/events/${eventId}/cameras`);
@@ -52,18 +51,18 @@ export function CameraStatusGrid({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [eventId]);
 
   // Auto-refresh every 15 seconds
   useEffect(() => {
     const interval = setInterval(refreshCameras, 15000);
     return () => clearInterval(interval);
-  }, [eventId]);
+  }, [eventId, refreshCameras]);
 
   // Initial data fetch
   useEffect(() => {
     refreshCameras();
-  }, []);
+  }, [refreshCameras]);
 
   const getStatusColor = (status: CameraConnectionClient['status']) => {
     switch (status) {

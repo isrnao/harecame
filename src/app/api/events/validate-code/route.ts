@@ -1,56 +1,82 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { EventService } from '@/lib/database';
+import { AuthService } from '@/lib/auth';
+import { participationCodeSchema } from '@/lib/validation';
+import { rateLimit, RATE_LIMITS, withErrorHandling, requestLogger } from '@/lib/middleware';
 
-// POST /api/events/validate-code - Validate participation code
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { participationCode } = body;
+// POST /api/events/validate-code - Validate participation code and generate camera token
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  requestLogger(request);
+  
+  // Apply rate limiting
+  const rateLimitResult = await rateLimit(RATE_LIMITS.joinEvent)(request);
+  if (rateLimitResult) return rateLimitResult;
 
-    // Validate required fields
-    if (!participationCode || typeof participationCode !== 'string') {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Participation code is required',
-        },
-        { status: 400 }
-      );
-    }
+  const body = await request.json();
+  
+  // Validate request body
+  const validation = participationCodeSchema.safeParse(body);
+  if (!validation.success) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Invalid participation code format',
+        details: validation.error.flatten().fieldErrors,
+      },
+      { status: 400 }
+    );
+  }
 
-    // Find event by participation code
-    const event = await EventService.getByParticipationCode(participationCode.toUpperCase());
-    
-    if (!event) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Participation code not found',
-        },
-        { status: 404 }
-      );
-    }
+  const { code: participationCode } = validation.data;
+  
+  // Generate participant ID (could be from request or generated)
+  const participantId = body.participantId || `participant-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const participantName = body.participantName;
 
-    // Return event information (without sensitive data)
-    return NextResponse.json({
-      success: true,
-      data: {
+  // Validate participation code and generate token
+  const result = await AuthService.validateParticipationCodeAndGenerateToken(
+    participationCode,
+    participantId,
+    participantName
+  );
+
+  if (!result) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Invalid participation code or event has ended',
+      },
+      { status: 404 }
+    );
+  }
+
+  const { token, event } = result;
+
+  // Generate LiveKit token for streaming
+  const liveKitToken = await AuthService.generateLiveKitToken(
+    participantId,
+    event.id,
+    participantName
+  );
+
+  // Return event information and tokens
+  return NextResponse.json({
+    success: true,
+    data: {
+      event: {
         id: event.id,
         title: event.title,
         description: event.description,
         scheduledAt: event.scheduledAt,
         status: event.status,
-        participationCode: event.participationCode,
       },
-    });
-  } catch (error) {
-    console.error('Failed to validate participation code:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to validate participation code',
+      participant: {
+        id: participantId,
+        name: participantName,
       },
-      { status: 500 }
-    );
-  }
-}
+      tokens: {
+        accessToken: token,
+        liveKitToken: liveKitToken,
+      },
+    },
+  });
+});
