@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateAPIDocumentation, API_EXAMPLES, RATE_LIMIT_DOCS, AUTH_DOCS } from '@/lib/api-docs';
 import { securityHeaders } from '@/lib/middleware';
 
+// Next.js 15: API ドキュメントは静的コンテンツとしてキャッシュ
+export const dynamic = 'force-static';
+
 // GET /api/docs - API Documentation
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CameraConnectionService } from '@/lib/database';
 
+// Next.js 15: カメラ状態はリアルタイムデータのためキャッシュ無効
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }
@@ -18,6 +21,11 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: cameras,
+    }, {
+      headers: {
+        // Next.js 15: リアルタイムデータのためキャッシュ無効
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      }
     });
 
   } catch (error) {

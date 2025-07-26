@@ -16,6 +16,9 @@ import {
   createCameraDisconnectedEvent 
 } from '@/lib/websocket';
 
+// キャッシュ設定: カメラ状態更新はキャッシュしない
+export const dynamic = 'force-dynamic';
+
 export const PUT = withErrorHandling(async (
   request: NextRequest,
   { params }: { params: Promise<{ eventId: string; cameraId: string }> }

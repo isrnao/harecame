@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
+import { useEffect, useCallback, createContext, useContext, ReactNode, useSyncExternalStore } from 'react';
 
 // Authentication types
 export interface AuthUser {
@@ -20,60 +20,147 @@ export interface AuthState {
 const AUTH_STORAGE_KEY = 'harecame-auth';
 const TOKEN_STORAGE_KEY = 'harecame-token';
 
-// Custom hook for authentication management
-export function useAuth() {
-  const [authState, setAuthState] = useState<AuthState>({
+// External store for localStorage synchronization
+class AuthStore {
+  private listeners = new Set<() => void>();
+  private authState: AuthState = {
     user: null,
     isLoading: true,
     error: null,
-  });
+  };
+  private cachedSnapshot: AuthState | null = null;
 
-  // Initialize auth state from localStorage
-  useEffect(() => {
-    const initializeAuth = () => {
-      try {
-        const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
-        const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+  constructor() {
+    // Initialize from localStorage on client side
+    if (typeof window !== 'undefined') {
+      this.initializeFromStorage();
+    }
+  }
+
+  private initializeFromStorage() {
+    try {
+      const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
+      const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+      
+      if (storedAuth && storedToken) {
+        const user: AuthUser = JSON.parse(storedAuth);
         
-        if (storedAuth && storedToken) {
-          const user: AuthUser = JSON.parse(storedAuth);
-          
-          // Check if token is expired
-          if (new Date(user.expiresAt) > new Date()) {
-            setAuthState({
-              user,
-              isLoading: false,
-              error: null,
-            });
-            return;
-          } else {
-            // Token expired, clear storage
-            localStorage.removeItem(AUTH_STORAGE_KEY);
-            localStorage.removeItem(TOKEN_STORAGE_KEY);
-          }
+        // Check if token is expired
+        if (new Date(user.expiresAt) > new Date()) {
+          this.authState = {
+            user,
+            isLoading: false,
+            error: null,
+          };
+          return;
+        } else {
+          // Token expired, clear storage
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+          localStorage.removeItem(TOKEN_STORAGE_KEY);
         }
-        
-        setAuthState({
-          user: null,
-          isLoading: false,
-          error: null,
-        });
-      } catch (error) {
-        console.error('Failed to initialize auth:', error);
-        setAuthState({
-          user: null,
-          isLoading: false,
-          error: 'Failed to initialize authentication',
-        });
       }
-    };
+      
+      this.authState = {
+        user: null,
+        isLoading: false,
+        error: null,
+      };
+    } catch (error) {
+      console.error('Failed to initialize auth:', error);
+      this.authState = {
+        user: null,
+        isLoading: false,
+        error: 'Failed to initialize authentication',
+      };
+    }
+  }
 
-    initializeAuth();
-  }, []);
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  getSnapshot = () => {
+    if (!this.cachedSnapshot) {
+      this.cachedSnapshot = this.authState;
+    }
+    return this.cachedSnapshot;
+  };
+
+  getServerSnapshot = () => {
+    // Server-side snapshot (no user authenticated)
+    return {
+      user: null,
+      isLoading: false,
+      error: null,
+    };
+  };
+
+  updateState = (newState: AuthState) => {
+    this.authState = newState;
+    this.notifyListeners();
+  };
+
+  setUser = (user: AuthUser | null) => {
+    if (user) {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+      localStorage.setItem(TOKEN_STORAGE_KEY, user.token);
+    } else {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+    
+    this.authState = {
+      ...this.authState,
+      user,
+      isLoading: false,
+      error: null,
+    };
+    this.cachedSnapshot = null;
+    this.notifyListeners();
+  };
+
+  setLoading = (isLoading: boolean) => {
+    this.authState = {
+      ...this.authState,
+      isLoading,
+    };
+    this.cachedSnapshot = null;
+    this.notifyListeners();
+  };
+
+  setError = (error: string | null) => {
+    this.authState = {
+      ...this.authState,
+      error,
+      isLoading: false,
+    };
+    this.cachedSnapshot = null;
+    this.notifyListeners();
+  };
+
+  private notifyListeners = () => {
+    this.listeners.forEach(listener => listener());
+  };
+}
+
+const authStore = new AuthStore();
+
+// Custom hook for authentication management
+export function useAuth() {
+  // Use external store for localStorage synchronization
+  const authState = useSyncExternalStore(
+    authStore.subscribe,
+    authStore.getSnapshot,
+    authStore.getServerSnapshot
+  );
 
   // Admin login
   const loginAsAdmin = useCallback(async (adminKey: string, eventId?: string) => {
-    setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
+    authStore.setLoading(true);
+    authStore.setError(null);
     
     try {
       const response = await fetch('/api/auth/admin', {
@@ -98,24 +185,11 @@ export function useAuth() {
         expiresAt: data.data.expiresAt,
       };
 
-      // Store auth data
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-      localStorage.setItem(TOKEN_STORAGE_KEY, user.token);
-
-      setAuthState({
-        user,
-        isLoading: false,
-        error: null,
-      });
-
+      authStore.setUser(user);
       return user;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
-      setAuthState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: errorMessage,
-      }));
+      authStore.setError(errorMessage);
       throw error;
     }
   }, []);
@@ -126,7 +200,8 @@ export function useAuth() {
     participantId?: string,
     participantName?: string
   ) => {
-    setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
+    authStore.setLoading(true);
+    authStore.setError(null);
     
     try {
       const response = await fetch('/api/events/validate-code', {
@@ -156,15 +231,7 @@ export function useAuth() {
         expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(), // 8 hours
       };
 
-      // Store auth data
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-      localStorage.setItem(TOKEN_STORAGE_KEY, user.token);
-
-      setAuthState({
-        user,
-        isLoading: false,
-        error: null,
-      });
+      authStore.setUser(user);
 
       return {
         user,
@@ -173,11 +240,7 @@ export function useAuth() {
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
-      setAuthState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: errorMessage,
-      }));
+      authStore.setError(errorMessage);
       throw error;
     }
   }, []);
@@ -197,15 +260,7 @@ export function useAuth() {
     } catch (error) {
       console.error('Logout API call failed:', error);
     } finally {
-      // Clear local storage and state
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      
-      setAuthState({
-        user: null,
-        isLoading: false,
-        error: null,
-      });
+      authStore.setUser(null);
     }
   }, [authState.user]);
 

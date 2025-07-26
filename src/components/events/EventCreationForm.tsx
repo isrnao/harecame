@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import Form from 'next/form';
 import { createEventAction, type EventCreationState } from '@/app/actions/events';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,13 +43,30 @@ export function EventCreationForm() {
 
   const {
     register,
-    handleSubmit,
     formState: { errors },
   } = useForm<EventFormData>({
     resolver: zodResolver(eventFormSchema),
   });
 
-  const onSubmit = async (data: EventFormData) => {
+  // Enhanced form action with client-side validation and optimistic feedback
+  const enhancedFormAction = async (formData: FormData) => {
+    // Client-side validation
+    const title = formData.get('title') as string;
+    const description = formData.get('description') as string;
+    const scheduledAt = formData.get('scheduledAt') as string;
+    
+    const validationResult = eventFormSchema.safeParse({
+      title,
+      description: description || undefined,
+      scheduledAt: scheduledAt || undefined,
+    });
+    
+    if (!validationResult.success) {
+      // Handle validation errors
+      console.error('Client-side validation failed:', validationResult.error);
+      return;
+    }
+
     // Show optimistic feedback
     setOptimisticState({
       success: false,
@@ -56,15 +74,6 @@ export function EventCreationForm() {
     });
 
     startTransition(() => {
-      const formData = new FormData();
-      formData.append('title', data.title);
-      if (data.description) {
-        formData.append('description', data.description);
-      }
-      if (data.scheduledAt) {
-        formData.append('scheduledAt', data.scheduledAt);
-      }
-      
       formAction(formData);
     });
   };
@@ -87,7 +96,7 @@ export function EventCreationForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <Form action={enhancedFormAction} className="space-y-6">
           {/* Event Title */}
           <div className="space-y-2">
             <Label htmlFor="title" className="flex items-center gap-2">
@@ -192,7 +201,7 @@ export function EventCreationForm() {
               キャンセル
             </Button>
           </div>
-        </form>
+        </Form>
       </CardContent>
     </Card>
   );

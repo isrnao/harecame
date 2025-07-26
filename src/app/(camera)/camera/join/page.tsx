@@ -45,7 +45,9 @@ function CameraJoinContent({ participationCode }: { participationCode?: string }
 }
 
 export default async function CameraJoinPage({ searchParams }: CameraJoinPageProps) {
-  const { code } = await searchParams;
+  // Next.js 15: searchParams を async/await パターンで使用
+  const resolvedSearchParams = await searchParams;
+  const { code } = resolvedSearchParams;
 
   return (
     <Suspense fallback={

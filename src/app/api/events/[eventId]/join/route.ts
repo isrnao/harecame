@@ -14,6 +14,9 @@ import { joinEventSchema } from '@/lib/validation';
 import { isValidUUID } from '@/lib/validation';
 import { WebSocketEventHandler, createCameraJoinedEvent } from '@/lib/websocket';
 
+// キャッシュ設定: イベント参加はキャッシュしない
+export const dynamic = 'force-dynamic';
+
 // POST /api/events/[eventId]/join - Join event as camera operator
 export const POST = withErrorHandling(async (
   request: NextRequest,

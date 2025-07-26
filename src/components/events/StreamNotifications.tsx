@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,24 +32,15 @@ interface StreamNotificationsProps {
 
 export function StreamNotifications({ cameras }: StreamNotificationsProps) {
   const [notifications, setNotifications] = useState<StreamNotification[]>([]);
-  const previousCamerasRef = useRef<CameraConnectionClient[]>([]);
+  // React 19のベストプラクティス: useStateで前回の値を保持
+  const [previousCameras, setPreviousCameras] = useState<CameraConnectionClient[]>([]);
 
-  // Monitor camera changes and generate notifications
-  useEffect(() => {
-    const previousCameras = previousCamerasRef.current;
-    
-    if (previousCameras.length === 0) {
-      previousCamerasRef.current = cameras;
-      return;
-    }
-
-    // Deep comparison to avoid unnecessary updates
-    const camerasChanged = JSON.stringify(cameras) !== JSON.stringify(previousCameras);
-    if (!camerasChanged) {
-      return;
-    }
-
-    const newNotifications: StreamNotification[] = [];
+  // レンダリング中の状態調整 - 前回のpropsと比較が必要な場合の適切な実装
+  if (JSON.stringify(cameras) !== JSON.stringify(previousCameras)) {
+    // カメラの変更を検出した場合の処理
+    if (previousCameras.length > 0) {
+      // 通知生成ロジックをレンダリング中に実行
+      const newNotifications: StreamNotification[] = [];
 
     // Check for new camera connections
     cameras.forEach(camera => {
@@ -120,12 +111,14 @@ export function StreamNotifications({ cameras }: StreamNotificationsProps) {
       }
     });
 
-    if (newNotifications.length > 0) {
-      setNotifications(prev => [...newNotifications, ...prev].slice(0, 10)); // Keep last 10 notifications
+      if (newNotifications.length > 0) {
+        setNotifications(prev => [...newNotifications, ...prev].slice(0, 10)); // Keep last 10 notifications
+      }
     }
-
-    previousCamerasRef.current = cameras;
-  }, [cameras]);
+    
+    // 前回のカメラ状態を更新
+    setPreviousCameras(cameras);
+  }
 
   // Auto-hide notifications after 5 seconds
   useEffect(() => {

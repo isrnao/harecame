@@ -3,6 +3,9 @@ import { AuthService } from '@/lib/auth';
 import { participationCodeSchema } from '@/lib/validation';
 import { rateLimit, RATE_LIMITS, withErrorHandling, requestLogger } from '@/lib/middleware';
 
+// キャッシュ設定: 参加コード検証はキャッシュしない
+export const dynamic = 'force-dynamic';
+
 // POST /api/events/validate-code - Validate participation code and generate camera token
 export const POST = withErrorHandling(async (request: NextRequest) => {
   requestLogger(request);

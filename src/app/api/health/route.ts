@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+// Next.js 15: キャッシュ設定を明示化
+export const dynamic = 'force-static';
+
 // GET /api/health - ヘルスチェックエンドポイント
 export async function GET() {
   return NextResponse.json({

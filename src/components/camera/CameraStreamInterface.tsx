@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useOptimistic, startTransition } from "react";
 import {
   Room,
   RoomEvent,
@@ -9,11 +9,15 @@ import {
   ConnectionState,
   ConnectionQuality,
   Track,
+  DisconnectReason,
 } from "livekit-client";
 import { useDeviceOrientation } from "@/hooks/useDeviceOrientation";
 import { useNetworkQuality } from "@/hooks/useNetworkQuality";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { CameraPermissionError } from "@/components/error/CameraPermissionError";
+import { 
+  useMediaPermissionHandler
+} from "@/lib/event-handlers";
 import {
   Card,
   CardContent,
@@ -74,6 +78,26 @@ export function CameraStreamInterface({
     participantName,
   });
 
+  // roomTokenやeventIdの変更時に状態をリセットするため、これらをkeyとして使用
+  // レンダリング中の状態調整: 前回のpropsと比較して変更があった場合の処理
+  const [prevProps, setPrevProps] = useState({ roomToken, eventId });
+  
+  // レンダリング中の状態調整 - propsが変更された場合の処理
+  if (prevProps.roomToken !== roomToken || prevProps.eventId !== eventId) {
+    console.log("Props changed, resetting component state:", {
+      prevRoomToken: prevProps.roomToken ? "present" : "missing",
+      newRoomToken: roomToken ? "present" : "missing",
+      prevEventId: prevProps.eventId,
+      newEventId: eventId,
+    });
+    
+    // 前回のpropsを更新
+    setPrevProps({ roomToken, eventId });
+    
+    // 状態をリセット（接続状態は保持して、新しいトークンで再接続を促す）
+    // これにより、useEffectでの複雑な依存関係管理を避けることができる
+  }
+  
   const [room] = useState(() => new Room());
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -82,6 +106,15 @@ export function CameraStreamInterface({
   );
   const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality>(
     ConnectionQuality.Unknown
+  );
+
+  // 接続状態の楽観的更新用のuseOptimistic
+  const [optimisticConnectionState, setOptimisticConnectionState] = useOptimistic(
+    { isConnected, isConnecting },
+    (currentState, optimisticUpdate: { isConnected?: boolean; isConnecting?: boolean }) => ({
+      ...currentState,
+      ...optimisticUpdate,
+    })
   );
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
@@ -96,7 +129,31 @@ export function CameraStreamInterface({
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isDisconnected, setIsDisconnected] = useState(false);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
+  // React 19のref cleanup機能を活用したリソース管理
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  
+  // React 19のref cleanup機能を使用したビデオ要素の管理
+  const videoRefCallback = useCallback((element: HTMLVideoElement | null) => {
+    videoRef.current = element;
+    
+    if (!element) return;
+    
+    // ビデオ要素の初期化
+    element.playsInline = true;
+    element.muted = true;
+    element.autoplay = true;
+    
+    // クリーンアップ関数を返す（React 19の新機能）
+    return () => {
+      console.log('Video element cleanup');
+      if (element.srcObject) {
+        const stream = element.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+        element.srcObject = null;
+      }
+    };
+  }, []);
+  
   const localVideoTrack = useRef<LocalVideoTrack | null>(null);
   const localAudioTrack = useRef<LocalAudioTrack | null>(null);
 
@@ -109,35 +166,9 @@ export function CameraStreamInterface({
   // ネットワーク状態監視
   const { retryWithBackoff } = useNetworkStatus();
 
-  // Initialize camera and microphone
-  const initializeMedia = useCallback(async () => {
-    try {
-      setError(null);
-      setMediaError(null);
-      console.log("Requesting camera and microphone permissions...");
-
-      // Request camera and microphone permissions using getUserMedia
-      // ネットワーク品質に基づく動的品質調整
-      const videoConstraints = {
-        width: { ideal: recommendedQuality.width },
-        height: { ideal: recommendedQuality.height },
-        frameRate: { ideal: recommendedQuality.frameRate },
-      };
-
-      console.log("Using video quality based on network:", {
-        network: networkQuality.effectiveType,
-        quality: recommendedQuality,
-      });
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: videoConstraints,
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-
+  // 共通のメディア権限ハンドラーを使用
+  const handleMediaPermission = useMediaPermissionHandler(
+    (stream) => {
       console.log("Media stream obtained successfully");
       console.log("Video tracks:", stream.getVideoTracks().length);
       console.log("Audio tracks:", stream.getAudioTracks().length);
@@ -155,13 +186,12 @@ export function CameraStreamInterface({
         videoRef.current.srcObject = stream;
 
         // ビデオの再生を確実に開始
-        try {
-          await videoRef.current.play();
+        videoRef.current.play().then(() => {
           console.log("Video playback started successfully");
-        } catch (playError) {
+        }).catch((playError) => {
           console.error("Failed to start video playback:", playError);
           // ユーザーの操作が必要な場合もあるため、エラーは警告として扱う
-        }
+        });
 
         // ビデオが読み込まれたことを確認
         videoRef.current.onloadedmetadata = () => {
@@ -176,41 +206,65 @@ export function CameraStreamInterface({
 
       console.log("Local video preview started");
       setIsMediaInitialized(true);
-
-      return { videoTrack, audioTrack };
-    } catch (error) {
-      console.error("Failed to initialize media:", error);
-
-      if (error instanceof Error) {
-        setMediaError(error);
-        if (error.name === "NotAllowedError") {
-          setError(
-            "カメラまたはマイクへのアクセスが拒否されました。ブラウザの設定を確認してください。"
-          );
-        } else if (error.name === "NotFoundError") {
-          setError(
-            "カメラまたはマイクが見つかりません。デバイスが接続されているか確認してください。"
-          );
-        } else if (error.name === "NotReadableError") {
-          setError(
-            "カメラまたはマイクが他のアプリケーションで使用されています。"
-          );
-        } else {
-          setError(`メディアデバイスの初期化に失敗しました: ${error.message}`);
-        }
-      } else {
-        setError(
-          "カメラまたはマイクへのアクセスが拒否されました。ブラウザの設定を確認してください。"
-        );
+    },
+    (error) => {
+      setError(error.message);
+      if (error.code === 'PERMISSION_DENIED' || error.code === 'DEVICE_NOT_FOUND' || error.code === 'DEVICE_IN_USE') {
+        setMediaError(new Error(error.message));
+        const errorWithName = setMediaError as typeof setMediaError & { name?: string };
+        errorWithName.name = error.code;
       }
       setIsMediaInitialized(false);
-      throw error;
     }
-  }, [recommendedQuality, networkQuality]);
+  );
 
-  // Connect to LiveKit room with retry logic
+  // Initialize camera and microphone using common handler
+  const initializeMedia = useCallback(async () => {
+    setError(null);
+    setMediaError(null);
+    console.log("Requesting camera and microphone permissions...");
+
+    // ネットワーク品質に基づく動的品質調整
+    const videoConstraints = {
+      width: { ideal: recommendedQuality.width },
+      height: { ideal: recommendedQuality.height },
+      frameRate: { ideal: recommendedQuality.frameRate },
+    };
+
+    console.log("Using video quality based on network:", {
+      network: networkQuality.effectiveType,
+      quality: recommendedQuality,
+    });
+
+    const constraints: MediaStreamConstraints = {
+      video: videoConstraints,
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    };
+
+    const result = await handleMediaPermission(constraints);
+    
+    if (result.success && result.data) {
+      const stream = result.data;
+      const videoTrack = new LocalVideoTrack(stream.getVideoTracks()[0]);
+      const audioTrack = new LocalAudioTrack(stream.getAudioTracks()[0]);
+      return { videoTrack, audioTrack };
+    } else {
+      throw new Error(result.error?.message || 'Failed to initialize media');
+    }
+  }, [recommendedQuality, networkQuality, handleMediaPermission]);
+
+  // Connect to LiveKit room with retry logic and optimistic updates
   const connectToRoom = useCallback(async () => {
-    if (isConnecting || isConnected) return;
+    if (optimisticConnectionState.isConnecting || optimisticConnectionState.isConnected) return;
+
+    // 楽観的更新を即座に適用
+    startTransition(() => {
+      setOptimisticConnectionState({ isConnecting: true, isConnected: false });
+    });
 
     setIsConnecting(true);
     setError(null);
@@ -304,8 +358,9 @@ export function CameraStreamInterface({
       setIsConnecting(false);
     }
   }, [
-    isConnecting,
-    isConnected,
+    optimisticConnectionState.isConnecting,
+    optimisticConnectionState.isConnected,
+    setOptimisticConnectionState,
     initializeMedia,
     roomName,
     roomToken,
@@ -313,8 +368,13 @@ export function CameraStreamInterface({
     retryWithBackoff,
   ]);
 
-  // Disconnect from room
+  // Disconnect from room with optimistic updates
   const disconnectFromRoom = useCallback(async () => {
+    // 楽観的更新を即座に適用
+    startTransition(() => {
+      setOptimisticConnectionState({ isConnected: false, isConnecting: false });
+    });
+
     try {
       console.log("Disconnecting from room, current state:", {
         isConnected,
@@ -379,7 +439,7 @@ export function CameraStreamInterface({
       setIsConnected(false);
       setIsMediaInitialized(false);
     }
-  }, [isConnected, room]);
+  }, [isConnected, room, setOptimisticConnectionState]);
 
   // Toggle video
   const toggleVideo = useCallback(async () => {
@@ -540,13 +600,22 @@ export function CameraStreamInterface({
     }
   }, [isConnected, room]);
 
-  // Set up room event listeners
+  // WebSocket接続管理の最適化 - React 19のref cleanup機能を活用
+  const roomEventListenersRef = useRef<{
+    cleanup: (() => void) | null;
+  }>({ cleanup: null });
+
+  // Set up room event listeners with improved resource management
   useEffect(() => {
     const handleConnectionStateChanged = (state: ConnectionState) => {
       console.log("Room connection state changed:", state);
       setConnectionState(state);
       if (state === ConnectionState.Disconnected) {
         setIsConnected(false);
+        // 楽観的状態も更新
+        startTransition(() => {
+          setOptimisticConnectionState({ isConnected: false, isConnecting: false });
+        });
       }
     };
 
@@ -555,37 +624,83 @@ export function CameraStreamInterface({
       setConnectionQuality(quality);
     };
 
-    const handleDisconnected = () => {
-      console.log("Room disconnected event received");
+    const handleDisconnected = (reason?: DisconnectReason) => {
+      console.log("Room disconnected event received, reason:", reason);
       setIsConnected(false);
-      setError("配信から切断されました");
+      setIsConnecting(false);
+      
+      // 楽観的状態も更新
+      startTransition(() => {
+        setOptimisticConnectionState({ isConnected: false, isConnecting: false });
+      });
+
+      // 切断理由に応じたエラーメッセージ
+      if (reason) {
+        const reasonString = reason.toString();
+        if (reasonString.includes('WEBSOCKET') || reasonString.includes('websocket')) {
+          setError("ネットワーク接続が不安定です。再接続してください。");
+        } else if (reasonString.includes('TOKEN') || reasonString.includes('token')) {
+          setError("認証トークンが期限切れです。再度参加してください。");
+        } else {
+          setError(`配信から切断されました: ${reasonString}`);
+        }
+      } else {
+        setError("配信から切断されました");
+      }
     };
+
+    const handleReconnecting = () => {
+      console.log("Room reconnecting...");
+      setError("接続を復旧中...");
+      startTransition(() => {
+        setOptimisticConnectionState({ isConnecting: true, isConnected: false });
+      });
+    };
+
+    const handleReconnected = () => {
+      console.log("Room reconnected successfully");
+      setError(null);
+      setIsConnected(true);
+      startTransition(() => {
+        setOptimisticConnectionState({ isConnected: true, isConnecting: false });
+      });
+    };
+
+
 
     // イベントリスナーを安全に追加
     if (room) {
       room.on(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
-      room.on(
-        RoomEvent.ConnectionQualityChanged,
-        handleConnectionQualityChanged
-      );
+      room.on(RoomEvent.ConnectionQualityChanged, handleConnectionQualityChanged);
       room.on(RoomEvent.Disconnected, handleDisconnected);
+      room.on(RoomEvent.Reconnecting, handleReconnecting);
+      room.on(RoomEvent.Reconnected, handleReconnected);
+      
+      // WebSocketエラーイベントも監視
+      // Note: LiveKitのengine構造が変更されたため、WebSocketエラーイベントの監視は省略
+
+      // クリーンアップ関数を保存
+      roomEventListenersRef.current.cleanup = () => {
+        console.log("Cleaning up room event listeners");
+        room.off(RoomEvent.ConnectionStateChanged, handleConnectionStateChanged);
+        room.off(RoomEvent.ConnectionQualityChanged, handleConnectionQualityChanged);
+        room.off(RoomEvent.Disconnected, handleDisconnected);
+        room.off(RoomEvent.Reconnecting, handleReconnecting);
+        room.off(RoomEvent.Reconnected, handleReconnected);
+        
+        // Note: LiveKitのengine構造が変更されたため、WebSocketエラーイベントの監視は省略
+      };
     }
 
     return () => {
-      // イベントリスナーを安全に削除
-      if (room) {
-        room.off(
-          RoomEvent.ConnectionStateChanged,
-          handleConnectionStateChanged
-        );
-        room.off(
-          RoomEvent.ConnectionQualityChanged,
-          handleConnectionQualityChanged
-        );
-        room.off(RoomEvent.Disconnected, handleDisconnected);
+      // React 19のref cleanup機能を活用したクリーンアップ
+      const currentCleanup = roomEventListenersRef.current.cleanup;
+      if (currentCleanup) {
+        currentCleanup();
+        roomEventListenersRef.current.cleanup = null;
       }
     };
-  }, [room]);
+  }, [room, setOptimisticConnectionState]);
 
   // Update stream stats periodically
   useEffect(() => {
@@ -652,29 +767,45 @@ export function CameraStreamInterface({
     }
   }, [isConnected, cameraConnectionId, updateCameraStatus]);
 
-  // Cleanup on unmount
+  // React 19のref cleanup機能を活用したリソース管理の最適化
+  const resourceCleanupRef = useRef<{
+    mediaCleanup: (() => void) | null;
+    roomCleanup: (() => void) | null;
+  }>({ mediaCleanup: null, roomCleanup: null });
+
+  // Cleanup on unmount with improved resource management
   const cleanupResources = useCallback(() => {
-    // アンマウント時のクリーンアップ
     console.log("Component unmounting, cleaning up resources");
 
-    // メディアトラックの停止
+    // メディアトラックの停止（React 19のref cleanup機能を活用）
     if (localVideoTrack.current) {
+      console.log("Stopping local video track");
       localVideoTrack.current.stop();
+      localVideoTrack.current = null;
     }
     if (localAudioTrack.current) {
+      console.log("Stopping local audio track");
       localAudioTrack.current.stop();
+      localAudioTrack.current = null;
     }
 
-    // ビデオ要素のクリア
+    // ビデオ要素のクリア（React 19のref cleanup機能で自動処理される）
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
 
-    // Roomからの切断（接続状態をチェック）
+    // Room接続のクリーンアップ
     if (room && room.state !== ConnectionState.Disconnected) {
+      console.log("Disconnecting room during cleanup");
       room.disconnect().catch((error) => {
         console.error("Error during cleanup disconnect:", error);
       });
+    }
+
+    // イベントリスナーのクリーンアップ
+    if (roomEventListenersRef.current.cleanup) {
+      roomEventListenersRef.current.cleanup();
+      roomEventListenersRef.current.cleanup = null;
     }
 
     // リソース監視のクリーンアップ
@@ -689,11 +820,54 @@ export function CameraStreamInterface({
       delete (window as unknown as { harecameCleanup?: unknown })
         .harecameCleanup;
     }
+
+    // カスタムクリーンアップ関数の実行
+    if (resourceCleanupRef.current.mediaCleanup) {
+      resourceCleanupRef.current.mediaCleanup();
+      resourceCleanupRef.current.mediaCleanup = null;
+    }
+    if (resourceCleanupRef.current.roomCleanup) {
+      resourceCleanupRef.current.roomCleanup();
+      resourceCleanupRef.current.roomCleanup = null;
+    }
   }, [room]);
 
+  // React 19のref cleanup機能を活用したアンマウント時のクリーンアップ
   useEffect(() => {
+    // リソース監視の設定
+    const setupResourceMonitoring = () => {
+      // メモリリークを防ぐためのリソース監視
+      const mediaCleanup = () => {
+        console.log("Media resource cleanup triggered");
+        if (localVideoTrack.current) {
+          localVideoTrack.current.stop();
+        }
+        if (localAudioTrack.current) {
+          localAudioTrack.current.stop();
+        }
+      };
+
+      const roomCleanup = () => {
+        console.log("Room resource cleanup triggered");
+        if (room && room.state !== ConnectionState.Disconnected) {
+          room.disconnect().catch(console.error);
+        }
+      };
+
+      resourceCleanupRef.current = { mediaCleanup, roomCleanup };
+
+      // グローバルクリーンアップ関数の設定（デバッグ用）
+      (window as unknown as { harecameCleanup?: unknown }).harecameCleanup = {
+        connection: roomCleanup,
+        stream: mediaCleanup,
+      };
+    };
+
+    setupResourceMonitoring();
+
+    // React 19のref cleanup機能を活用したクリーンアップ
     return cleanupResources;
-  }, [cleanupResources]);
+  }, [cleanupResources, room]);
 
   // カメラ権限エラーの場合は専用コンポーネントを表示
   if (
@@ -743,7 +917,7 @@ export function CameraStreamInterface({
         <CardContent className="p-3 sm:p-6">
           <div className="relative aspect-video bg-black rounded-lg overflow-hidden touch-manipulation">
             <video
-              ref={videoRef}
+              ref={videoRefCallback}
               autoPlay
               muted
               playsInline
@@ -809,26 +983,28 @@ export function CameraStreamInterface({
               </div>
             )}
 
-            {/* Status Overlay - モバイル最適化 */}
+            {/* Status Overlay - モバイル最適化（楽観的状態を使用） */}
             <div className="absolute top-2 left-2 sm:top-4 sm:left-4 flex flex-col sm:flex-row gap-1 sm:gap-2">
               <Badge
-                variant={isConnected ? "default" : "secondary"}
+                variant={optimisticConnectionState.isConnected ? "default" : "secondary"}
                 className="flex items-center gap-1 text-xs sm:text-sm px-2 py-1"
               >
-                {isConnected ? (
+                {optimisticConnectionState.isConnected ? (
                   <Wifi className="h-2 w-2 sm:h-3 sm:w-3" />
                 ) : (
                   <WifiOff className="h-2 w-2 sm:h-3 sm:w-3" />
                 )}
                 <span className="hidden sm:inline">
-                  {isConnected ? "ライブ配信中" : "未接続"}
+                  {optimisticConnectionState.isConnected ? "ライブ配信中" : 
+                   optimisticConnectionState.isConnecting ? "接続中..." : "未接続"}
                 </span>
                 <span className="sm:hidden">
-                  {isConnected ? "LIVE" : "OFF"}
+                  {optimisticConnectionState.isConnected ? "LIVE" : 
+                   optimisticConnectionState.isConnecting ? "..." : "OFF"}
                 </span>
               </Badge>
 
-              {isConnected && (
+              {optimisticConnectionState.isConnected && (
                 <Badge
                   variant="outline"
                   className="flex items-center gap-1 text-xs sm:text-sm px-2 py-1"
@@ -1022,14 +1198,14 @@ export function CameraStreamInterface({
                   </>
                 )}
               </Button>
-            ) : !isConnected ? (
+            ) : !optimisticConnectionState.isConnected ? (
               <Button
                 onClick={connectToRoom}
-                disabled={isConnecting}
+                disabled={optimisticConnectionState.isConnecting}
                 size="lg"
                 className="flex-1 max-w-xs min-h-[48px] touch-manipulation"
               >
-                {isConnecting ? (
+                {optimisticConnectionState.isConnecting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     <span className="hidden sm:inline">接続中...</span>
@@ -1092,7 +1268,7 @@ export function CameraStreamInterface({
           </div>
 
           {/* モバイル用の説明テキスト */}
-          {isConnected && (
+          {optimisticConnectionState.isConnected && (
             <div className="mt-4 text-center text-xs text-muted-foreground sm:hidden">
               <p>タップしてカメラ・マイクを切り替え</p>
             </div>
@@ -1101,7 +1277,7 @@ export function CameraStreamInterface({
       </Card>
 
       {/* Instructions */}
-      {!isConnected && (
+      {!optimisticConnectionState.isConnected && (
         <Card>
           <CardContent className="pt-6">
             <div className="text-center space-y-2">

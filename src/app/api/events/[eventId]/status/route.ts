@@ -12,6 +12,9 @@ import {
 import { updateStreamStatusSchema } from '@/lib/validation';
 import { isValidUUID } from '@/lib/validation';
 
+// Next.js 15: ストリーム状態はリアルタイムデータのためキャッシュ無効
+export const dynamic = 'force-dynamic';
+
 // GET /api/events/[eventId]/status - Get comprehensive stream status for an event
 export const GET = withErrorHandling(async (
   request: NextRequest,
@@ -89,7 +92,13 @@ export const GET = withErrorHandling(async (
         streamQuality: camera.streamQuality,
       })),
     },
-    { headers: securityHeaders() }
+    { 
+      headers: {
+        ...securityHeaders(),
+        // Next.js 15: リアルタイムデータのためキャッシュ無効
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      }
+    }
   );
 });
 

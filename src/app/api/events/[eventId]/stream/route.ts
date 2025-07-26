@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SSEHandler } from '@/lib/websocket';
 import { EventService } from '@/lib/database';
 
+// Next.js 15: SSEストリームはリアルタイムデータのためキャッシュ無効
+export const dynamic = 'force-dynamic';
+
 // GET /api/events/[eventId]/stream - Server-Sent Events for real-time updates
 export async function GET(
   request: NextRequest,

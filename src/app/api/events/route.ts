@@ -43,7 +43,13 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         total: events.length,
       },
     },
-    { headers: securityHeaders() }
+    { 
+      headers: {
+        ...securityHeaders(),
+        // Next.js 15: イベント一覧は5分間キャッシュ
+        'Cache-Control': 'public, max-age=300, s-maxage=300',
+      }
+    }
   );
 });
 

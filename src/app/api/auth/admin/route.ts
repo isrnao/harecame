@@ -3,6 +3,9 @@ import { AuthService, SessionService } from '@/lib/auth';
 import { rateLimit, withErrorHandling, requestLogger } from '@/lib/middleware';
 import { z } from 'zod';
 
+// キャッシュ設定: 認証エンドポイントはキャッシュしない
+export const dynamic = 'force-dynamic';
+
 // Admin login schema
 const adminLoginSchema = z.object({
   adminKey: z.string().min(1, 'Admin key is required'),

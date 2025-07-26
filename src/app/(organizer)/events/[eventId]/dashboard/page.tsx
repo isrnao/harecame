@@ -90,7 +90,10 @@ export default async function EventDashboardPage({ params }: DashboardPageProps)
         </TabsContent>
 
         <TabsContent value="qrcode" className="space-y-6">
-          <QRCodeGenerator event={event} />
+          <QRCodeGenerator 
+            key={event.participationCode} 
+            event={event} 
+          />
         </TabsContent>
       </Tabs>
     </div>

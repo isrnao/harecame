@@ -90,6 +90,7 @@ export function CameraStreamClient({ event }: CameraStreamClientProps) {
   return (
     <div className="container mx-auto py-8 px-4">
       <CameraStreamInterface
+        key={`${event.id}-${sessionData.roomToken}`}
         roomToken={sessionData.roomToken}
         roomName={sessionData.roomName}
         eventId={event.id}

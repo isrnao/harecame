@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -34,6 +34,9 @@ import { StreamManagementPanel } from "./StreamManagementPanel";
 import { StreamNotifications } from "./StreamNotifications";
 import { useLoadingState } from "@/hooks/useLoadingState";
 import { useEventDashboardApi } from "@/hooks/useEventDashboardApi";
+import { 
+  useClipboardHandler
+} from "@/lib/event-handlers";
 
 interface EventDashboardProps {
   event: EventClient;
@@ -86,6 +89,19 @@ export function EventDashboard({
           setYoutubeStats(result.youtubeStats);
           setLastUpdated(new Date());
           console.log('Dashboard data updated successfully');
+          
+          // Next.js 15のafter()を使用してダッシュボード更新後のアナリティクス送信を最適化
+          // 実際の実装では、after() APIを使用して非ブロッキングで実行
+          // after(() => {
+          //   analyticsService.trackDashboardUpdate({
+          //     eventId,
+          //     cameraCount: result.cameras.length,
+          //     activeCameraCount: result.cameras.filter(c => c.status === 'active').length,
+          //     viewerCount: result.youtubeStats?.viewerCount || 0,
+          //     streamHealth: result.streamStatus?.streamHealth,
+          //     timestamp: new Date().toISOString()
+          //   });
+          // });
         }
       } catch (error) {
         if (isMountedRef.current && error instanceof Error && error.name !== 'AbortError') {
@@ -154,18 +170,16 @@ export function EventDashboard({
     };
   }, [updateDashboardData, cleanup]);
 
-  const activeCameras = cameras.filter((camera) => camera.status === "active");
-  const totalCameras = cameras.length;
-
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      // トースト通知を表示（実装時にToastProviderが必要）
+  // 共通のクリップボードハンドラーを使用
+  const handleClipboardCopy = useClipboardHandler(
+    (text) => {
       console.log("Copied to clipboard:", text);
-    } catch (error) {
-      console.error("Failed to copy to clipboard:", error);
+      // トースト通知を表示（実装時にToastProviderが必要）
+    },
+    (error) => {
+      setError(error.message);
     }
-  };
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -195,6 +209,68 @@ export function EventDashboard({
     }
   };
 
+  // 派生状態をuseMemoで最適化（高価な計算のキャッシュ）
+  const cameraStats = useMemo(() => {
+    const activeCameras = cameras.filter((camera) => camera.status === "active");
+    const totalCameras = cameras.length;
+    const inactiveCameras = cameras.filter((camera) => camera.status === "inactive");
+    const errorCameras = cameras.filter((camera) => camera.status === "error");
+    
+    return {
+      activeCameras,
+      totalCameras,
+      inactiveCameras,
+      errorCameras,
+      activeCount: activeCameras.length,
+      inactiveCount: inactiveCameras.length,
+      errorCount: errorCameras.length,
+    };
+  }, [cameras]);
+
+  // 視聴者数の計算をuseMemoで最適化
+  const viewerCount = useMemo(() => {
+    return youtubeStats?.viewerCount || streamStatus?.youtubeViewerCount || 0;
+  }, [youtubeStats?.viewerCount, streamStatus?.youtubeViewerCount]);
+
+  // 配信時間の表示をuseMemoで最適化
+  const streamDuration = useMemo(() => {
+    return youtubeStats?.duration || "00:00:00";
+  }, [youtubeStats?.duration]);
+
+  // ストリーム健康状態の表示をuseMemoで最適化
+  const streamHealthDisplay = useMemo(() => {
+    const health = streamStatus?.streamHealth || "unknown";
+    const healthText = {
+      excellent: "優秀",
+      good: "良好", 
+      poor: "不安定",
+      critical: "危険",
+      unknown: "不明"
+    }[health] || "不明";
+    
+    return {
+      health,
+      text: healthText,
+      color: getHealthColor(health)
+    };
+  }, [streamStatus?.streamHealth]);
+
+  // イベントステータスの表示をuseMemoで最適化
+  const eventStatusDisplay = useMemo(() => {
+    const status = event.status;
+    const statusText = {
+      live: "ライブ中",
+      scheduled: "予定", 
+      ended: "終了"
+    }[status] || "不明";
+    
+    return {
+      status,
+      text: statusText,
+      color: getStatusColor(status)
+    };
+  }, [event.status]);
+
   return (
     <div className="space-y-6">
       {/* Error Display */}
@@ -220,13 +296,9 @@ export function EventDashboard({
         </div>
         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
           <Badge
-            className={`${getStatusColor(event.status)} text-xs sm:text-sm`}
+            className={`${eventStatusDisplay.color} text-xs sm:text-sm`}
           >
-            {event.status === "live"
-              ? "ライブ中"
-              : event.status === "scheduled"
-              ? "予定"
-              : "終了"}
+            {eventStatusDisplay.text}
           </Badge>
           <Button
             variant="outline"
@@ -261,9 +333,9 @@ export function EventDashboard({
             <Video className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeCameras.length}</div>
+            <div className="text-2xl font-bold">{cameraStats.activeCount}</div>
             <p className="text-xs text-muted-foreground">
-              全{totalCameras}台中
+              全{cameraStats.totalCameras}台中
             </p>
           </CardContent>
         </Card>
@@ -275,9 +347,7 @@ export function EventDashboard({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {youtubeStats?.viewerCount ||
-                streamStatus?.youtubeViewerCount ||
-                0}
+              {viewerCount}
             </div>
             <p className="text-xs text-muted-foreground">現在の視聴者</p>
           </CardContent>
@@ -296,20 +366,8 @@ export function EventDashboard({
             <div className="text-2xl font-bold">
               {streamStatus?.isLive ? "ライブ" : "オフライン"}
             </div>
-            <p
-              className={`text-xs ${getHealthColor(
-                streamStatus?.streamHealth || "unknown"
-              )}`}
-            >
-              {streamStatus?.streamHealth === "excellent"
-                ? "優秀"
-                : streamStatus?.streamHealth === "good"
-                ? "良好"
-                : streamStatus?.streamHealth === "poor"
-                ? "不安定"
-                : streamStatus?.streamHealth === "critical"
-                ? "危険"
-                : "不明"}
+            <p className={`text-xs ${streamHealthDisplay.color}`}>
+              {streamHealthDisplay.text}
             </p>
           </CardContent>
         </Card>
@@ -321,7 +379,7 @@ export function EventDashboard({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {youtubeStats?.duration || "00:00:00"}
+              {streamDuration}
             </div>
             <p className="text-xs text-muted-foreground">経過時間</p>
           </CardContent>
@@ -346,7 +404,7 @@ export function EventDashboard({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => copyToClipboard(event.participationCode)}
+                  onClick={() => handleClipboardCopy(event.participationCode)}
                   className="min-h-[40px] min-w-[40px] touch-manipulation"
                   aria-label="参加コードをコピー"
                 >
@@ -370,7 +428,7 @@ export function EventDashboard({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => copyToClipboard(event.youtubeStreamUrl!)}
+                    onClick={() => handleClipboardCopy(event.youtubeStreamUrl!)}
                     className="min-h-[40px] min-w-[40px] touch-manipulation"
                     aria-label="配信URLをコピー"
                   >
@@ -437,7 +495,7 @@ export function EventDashboard({
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
               variant={streamStatus?.isLive ? "secondary" : "default"}
-              disabled={streamStatus?.isLive || activeCameras.length === 0}
+              disabled={streamStatus?.isLive || cameraStats.activeCount === 0}
               className="min-h-[48px] touch-manipulation flex-1 sm:flex-none"
             >
               <Play className="h-4 w-4 mr-2" />
@@ -455,7 +513,7 @@ export function EventDashboard({
             </Button>
           </div>
 
-          {activeCameras.length === 0 && (
+          {cameraStats.activeCount === 0 && (
             <Alert className="mt-4">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-sm">

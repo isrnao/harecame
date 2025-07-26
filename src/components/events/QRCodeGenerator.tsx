@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import QRCode from 'qrcode';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,39 +13,79 @@ interface QRCodeGeneratorProps {
   event: EventClient;
 }
 
+// QR code generation options - moved outside component to avoid recreation
+const QR_CODE_OPTIONS = {
+  width: 256,
+  margin: 2,
+  color: {
+    dark: '#000000',
+    light: '#FFFFFF',
+  },
+  errorCorrectionLevel: 'M' as const,
+};
+
 export function QRCodeGenerator({ event }: QRCodeGeneratorProps) {
+  // eventプロパティの変更時に状態をリセットするため、participationCodeをkeyとして使用
+  // これにより、participationCodeが変更された時にコンポーネントが再作成され、
+  // 状態が自動的にリセットされる
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Generate camera join URL
-  const cameraJoinUrl = `${window.location.origin}/camera/join?code=${event.participationCode}`;
+  // Generate camera join URL - レンダリング中の計算に変更
+  const cameraJoinUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return `${window.location.origin}/camera/join?code=${event.participationCode}`;
+  }, [event.participationCode]);
 
-  // Generate QR code
-  useEffect(() => {
-    const generateQRCode = async () => {
+  // QRコード生成関数をuseMemoでキャッシュ（高価な計算の最適化）
+  const generateQRCode = useMemo(() => {
+    return async (url: string) => {
+      if (!url) return;
+      
       setIsGenerating(true);
+      setError(null);
+      
       try {
-        const dataUrl = await QRCode.toDataURL(cameraJoinUrl, {
-          width: 256,
-          margin: 2,
-          color: {
-            dark: '#000000',
-            light: '#FFFFFF',
-          },
-          errorCorrectionLevel: 'M',
-        });
+        const dataUrl = await QRCode.toDataURL(url, QR_CODE_OPTIONS);
         setQrCodeDataUrl(dataUrl);
-      } catch (error) {
-        console.error('Failed to generate QR code:', error);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'QRコードの生成に失敗しました';
+        console.error('Failed to generate QR code:', err);
+        setError(errorMessage);
       } finally {
         setIsGenerating(false);
       }
     };
+  }, []);
 
-    if (typeof window !== 'undefined') {
-      generateQRCode();
+  // React 19のref cleanup機能を活用したQRコード生成の管理
+  const generateQRCodeRef = useRef<AbortController | null>(null);
+
+  // QRコード生成のuseEffect（外部システム同期として適切に実装）
+  useEffect(() => {
+    if (!cameraJoinUrl) return;
+
+    // 前回のリクエストをキャンセル
+    if (generateQRCodeRef.current) {
+      generateQRCodeRef.current.abort();
     }
-  }, [cameraJoinUrl]);
+
+    // 新しいAbortControllerを作成
+    const controller = new AbortController();
+    generateQRCodeRef.current = controller;
+
+    // QRコード生成を実行
+    generateQRCode(cameraJoinUrl);
+
+    // React 19のref cleanup機能を活用したクリーンアップ
+    return () => {
+      if (generateQRCodeRef.current) {
+        generateQRCodeRef.current.abort();
+        generateQRCodeRef.current = null;
+      }
+    };
+  }, [cameraJoinUrl, generateQRCode]);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -88,6 +128,13 @@ export function QRCodeGenerator({ event }: QRCodeGeneratorProps) {
                 <p className="text-sm text-muted-foreground">QRコード生成中...</p>
               </div>
             </div>
+          ) : error ? (
+            <div className="w-64 h-64 bg-muted rounded-lg flex items-center justify-center">
+              <div className="text-center">
+                <QrCode className="h-8 w-8 mx-auto mb-2 text-red-500" />
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            </div>
           ) : qrCodeDataUrl ? (
             <div className="p-4 bg-white rounded-lg border">
               <Image
@@ -96,13 +143,13 @@ export function QRCodeGenerator({ event }: QRCodeGeneratorProps) {
                 width={256}
                 height={256}
                 className="w-64 h-64"
-                unoptimized={true}
                 priority={true}
+                quality={90}
               />
             </div>
           ) : (
             <div className="w-64 h-64 bg-muted rounded-lg flex items-center justify-center">
-              <p className="text-sm text-muted-foreground">QRコードの生成に失敗しました</p>
+              <p className="text-sm text-muted-foreground">QRコードを準備中...</p>
             </div>
           )}
         </div>

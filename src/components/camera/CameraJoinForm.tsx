@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import Form from "next/form";
 import { joinCameraAction, type CameraJoinState } from "@/app/actions/camera";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,7 +78,6 @@ export function CameraJoinForm({
 
   const {
     register,
-    handleSubmit,
     formState: { errors },
     setValue,
   } = useForm<CameraJoinFormData>({
@@ -169,8 +169,24 @@ export function CameraJoinForm({
     };
   };
 
-  const onSubmit = async (data: CameraJoinFormData) => {
-    console.log('Form submission started with data:', data);
+  // Enhanced form action that includes device info and client-side validation
+  const enhancedFormAction = async (formData: FormData) => {
+    console.log('Form submission started');
+    
+    // Client-side validation using react-hook-form
+    const participationCode = formData.get("participationCode") as string;
+    const participantName = formData.get("participantName") as string;
+    
+    const validationResult = cameraJoinFormSchema.safeParse({
+      participationCode: participationCode?.toUpperCase(),
+      participantName: participantName || undefined,
+    });
+    
+    if (!validationResult.success) {
+      // Handle validation errors
+      console.error('Client-side validation failed:', validationResult.error);
+      return;
+    }
     
     startTransition(() => {
       // Show optimistic feedback
@@ -179,16 +195,7 @@ export function CameraJoinForm({
         message: "イベントに参加中...",
       });
 
-      const formData = new FormData();
-      formData.append(
-        "participationCode",
-        data.participationCode.toUpperCase()
-      );
-      if (data.participantName) {
-        formData.append("participantName", data.participantName);
-      }
-
-      // Add device information
+      // Add device information to form data
       const deviceInfo = getDeviceInfo();
       formData.append("userAgent", deviceInfo.userAgent);
       formData.append("screenResolution", deviceInfo.screenResolution);
@@ -196,7 +203,12 @@ export function CameraJoinForm({
       formData.append("browser", deviceInfo.browser);
       formData.append("connectionType", deviceInfo.connectionType);
 
-      console.log('Calling formAction with participation code:', data.participationCode.toUpperCase());
+      // Ensure participation code is uppercase
+      if (participationCode) {
+        formData.set("participationCode", participationCode.toUpperCase());
+      }
+
+      console.log('Calling formAction with participation code:', participationCode?.toUpperCase());
       formAction(formData);
     });
   };
@@ -269,7 +281,7 @@ export function CameraJoinForm({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <Form action={enhancedFormAction} className="space-y-4">
           {/* Participation Code */}
           <div className="space-y-2">
             <Label
@@ -402,7 +414,7 @@ export function CameraJoinForm({
           <div className="text-center text-sm text-muted-foreground">
             <p>参加コードはイベント主催者から受け取ってください</p>
           </div>
-        </form>
+        </Form>
       </CardContent>
     </Card>
   );

@@ -264,7 +264,7 @@ describe('QRCodeGenerator', () => {
       render(<QRCodeGenerator event={mockEvent} />);
 
       await waitFor(() => {
-        expect(screen.getByText('QRコードの生成に失敗しました')).toBeInTheDocument();
+        expect(screen.getByText('QR code generation failed')).toBeInTheDocument();
       });
 
       // エラーがログに記録されることを確認

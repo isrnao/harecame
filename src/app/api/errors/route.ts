@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// キャッシュ設定: エラーレポートはキャッシュしない
+export const dynamic = 'force-dynamic';
+
 interface ErrorReport {
   message: string;
   stack?: string;

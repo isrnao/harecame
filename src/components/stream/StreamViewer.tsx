@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, useOptimistic, startTransition } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ViewerChat } from './ViewerChat';
 import { analyticsService } from '@/lib/analytics';
-import { Eye, Users, Wifi, WifiOff } from 'lucide-react';
+import { Eye, Users, Wifi, WifiOff, Heart, ThumbsUp, Smile, Star } from 'lucide-react';
 
 interface StreamViewerProps {
   eventId: string;
@@ -22,6 +22,19 @@ interface StreamStatus {
   streamHealth: 'excellent' | 'good' | 'poor' | 'critical';
 }
 
+interface ReactionCounts {
+  like: number;
+  heart: number;
+  smile: number;
+  star: number;
+}
+
+interface ReactionState {
+  counts: ReactionCounts;
+  userReactions: Set<string>;
+  isSubmitting: boolean;
+}
+
 export function StreamViewer({ eventId, streamUrl, eventTitle }: StreamViewerProps) {
   const [streamStatus, setStreamStatus] = useState<StreamStatus>({
     isLive: false,
@@ -31,9 +44,33 @@ export function StreamViewer({ eventId, streamUrl, eventTitle }: StreamViewerPro
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // YouTube動画IDを抽出する関数
-  const extractVideoId = (url: string): string | null => {
-    if (!url) return null;
+  // リアクション機能の状態管理
+  const [reactionState, setReactionState] = useState<ReactionState>({
+    counts: { like: 0, heart: 0, smile: 0, star: 0 },
+    userReactions: new Set(),
+    isSubmitting: false,
+  });
+
+  // useOptimisticでリアクションの楽観的更新を実装
+  const [optimisticReactions, setOptimisticReactions] = useOptimistic(
+    reactionState,
+    (currentState, optimisticUpdate: { type: keyof ReactionCounts; increment: boolean }) => ({
+      ...currentState,
+      counts: {
+        ...currentState.counts,
+        [optimisticUpdate.type]: optimisticUpdate.increment 
+          ? currentState.counts[optimisticUpdate.type] + 1
+          : Math.max(0, currentState.counts[optimisticUpdate.type] - 1)
+      },
+      userReactions: optimisticUpdate.increment
+        ? new Set([...currentState.userReactions, optimisticUpdate.type])
+        : new Set([...currentState.userReactions].filter(r => r !== optimisticUpdate.type))
+    })
+  );
+
+  // YouTube動画IDの抽出をuseMemoで最適化（高価な計算のキャッシュ）
+  const videoId = useMemo(() => {
+    if (!streamUrl) return null;
     
     // YouTube Live URLからvideo IDを抽出
     const patterns = [
@@ -42,14 +79,12 @@ export function StreamViewer({ eventId, streamUrl, eventTitle }: StreamViewerPro
     ];
     
     for (const pattern of patterns) {
-      const match = url.match(pattern);
+      const match = streamUrl.match(pattern);
       if (match) return match[1];
     }
     
     return null;
-  };
-
-  const videoId = extractVideoId(streamUrl);
+  }, [streamUrl]);
 
   // 視聴開始時の分析追跡
   useEffect(() => {
@@ -105,7 +140,8 @@ export function StreamViewer({ eventId, streamUrl, eventTitle }: StreamViewerPro
     return () => clearInterval(interval);
   }, [eventId]);
 
-  const getStatusColor = (health: string) => {
+  // ヘルパー関数をuseCallbackで最適化
+  const getStatusColor = useCallback((health: string) => {
     switch (health) {
       case 'excellent': return 'bg-green-500';
       case 'good': return 'bg-blue-500';
@@ -113,13 +149,147 @@ export function StreamViewer({ eventId, streamUrl, eventTitle }: StreamViewerPro
       case 'critical': return 'bg-red-500';
       default: return 'bg-gray-500';
     }
-  };
+  }, []);
 
-  const getStatusIcon = (health: string) => {
+  const getStatusIcon = useCallback((health: string) => {
     return health === 'critical' || health === 'poor' ? 
       <WifiOff className="h-4 w-4" /> : 
       <Wifi className="h-4 w-4" />;
-  };
+  }, []);
+
+  // ストリーム状態の派生値をuseMemoで最適化
+  const streamStatusDisplay = useMemo(() => {
+    return {
+      statusColor: getStatusColor(streamStatus.streamHealth),
+      statusIcon: getStatusIcon(streamStatus.streamHealth),
+      isLive: streamStatus.isLive,
+      activeCameraCount: streamStatus.activeCameraCount,
+      viewerCount: streamStatus.viewerCount,
+    };
+  }, [streamStatus, getStatusColor, getStatusIcon]);
+
+  // エラーハンドリング関数をuseCallbackで最適化
+  const handleRetry = useCallback(() => {
+    setError(null);
+    setIsLoading(true);
+    window.location.reload();
+  }, []);
+
+  // YouTube埋め込みURLをuseMemoで最適化
+  const embedUrl = useMemo(() => {
+    if (!videoId) return '';
+    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1`;
+  }, [videoId]);
+
+  // アナリティクス追跡関数をuseCallbackで最適化
+  const handleVideoLoad = useCallback(() => {
+    // YouTube プレーヤーの読み込み完了時に分析を記録
+    analyticsService.trackInteraction({
+      eventId,
+      action: 'view_start',
+      metadata: {
+        ...analyticsService.getDeviceInfo(),
+        quality: analyticsService.detectVideoQuality(),
+      },
+    });
+  }, [eventId]);
+
+  // リアクション送信のServer Action（模擬実装）
+  const sendReactionAction = useCallback(async (reactionType: keyof ReactionCounts) => {
+    try {
+      const response = await fetch(`/api/events/${eventId}/reactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: reactionType,
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send reaction');
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Failed to send reaction:', error);
+      throw error;
+    }
+  }, [eventId]);
+
+  // リアクションハンドラー（useOptimisticを使用した楽観的更新）
+  const handleReaction = useCallback(async (reactionType: keyof ReactionCounts) => {
+    if (optimisticReactions.isSubmitting) return;
+
+    const isAlreadyReacted = optimisticReactions.userReactions.has(reactionType);
+    
+    startTransition(() => {
+      // 楽観的更新を即座に適用
+      setOptimisticReactions({
+        type: reactionType,
+        increment: !isAlreadyReacted
+      });
+    });
+
+    try {
+      // Server Actionを実行（バックグラウンドで）
+      await sendReactionAction(reactionType);
+      
+      // 成功時は実際の状態を更新
+      setReactionState(prev => ({
+        ...prev,
+        counts: {
+          ...prev.counts,
+          [reactionType]: isAlreadyReacted 
+            ? Math.max(0, prev.counts[reactionType] - 1)
+            : prev.counts[reactionType] + 1
+        },
+        userReactions: isAlreadyReacted
+          ? new Set([...prev.userReactions].filter(r => r !== reactionType))
+          : new Set([...prev.userReactions, reactionType])
+      }));
+
+      // アナリティクス追跡
+      analyticsService.trackInteraction({
+        eventId,
+        action: 'view_start', // 既存のアクション型を使用
+        metadata: {
+          ...analyticsService.getDeviceInfo(),
+        },
+      });
+    } catch (error) {
+      // 失敗時は楽観的更新をロールバック（useOptimisticが自動で処理）
+      console.error('Reaction failed, rolling back:', error);
+    }
+  }, [eventId, optimisticReactions.isSubmitting, optimisticReactions.userReactions, sendReactionAction, setOptimisticReactions]);
+
+  // リアクション数を定期的に取得
+  useEffect(() => {
+    const fetchReactions = async () => {
+      try {
+        const response = await fetch(`/api/events/${eventId}/reactions`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.reactions) {
+            setReactionState(prev => ({
+              ...prev,
+              counts: data.reactions.counts || prev.counts,
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch reactions:', error);
+      }
+    };
+
+    fetchReactions();
+    const interval = setInterval(fetchReactions, 15000); // 15秒ごとに更新
+
+    return () => clearInterval(interval);
+  }, [eventId]);
 
   if (isLoading) {
     return (
@@ -147,11 +317,7 @@ export function StreamViewer({ eventId, streamUrl, eventTitle }: StreamViewerPro
           </Alert>
           <div className="mt-4 text-center">
             <Button 
-              onClick={() => {
-                setError(null);
-                setIsLoading(true);
-                window.location.reload();
-              }}
+              onClick={handleRetry}
               variant="outline"
               size="sm"
             >
@@ -192,35 +358,35 @@ export function StreamViewer({ eventId, streamUrl, eventTitle }: StreamViewerPro
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
         <div className="flex flex-wrap items-center gap-2">
           <Badge 
-            variant={streamStatus.isLive ? "default" : "secondary"}
-            className={streamStatus.isLive ? "bg-red-500 hover:bg-red-600" : ""}
+            variant={streamStatusDisplay.isLive ? "default" : "secondary"}
+            className={streamStatusDisplay.isLive ? "bg-red-500 hover:bg-red-600" : ""}
           >
-            {streamStatus.isLive ? "🔴 ライブ配信中" : "⏸️ 配信停止中"}
+            {streamStatusDisplay.isLive ? "🔴 ライブ配信中" : "⏸️ 配信停止中"}
           </Badge>
           
-          {streamStatus.activeCameraCount > 0 && (
+          {streamStatusDisplay.activeCameraCount > 0 && (
             <Badge variant="outline" className="flex items-center space-x-1 text-xs sm:text-sm">
               <Users className="h-3 w-3" />
-              <span className="hidden sm:inline">{streamStatus.activeCameraCount}台のカメラが接続中</span>
-              <span className="sm:hidden">{streamStatus.activeCameraCount}台接続中</span>
+              <span className="hidden sm:inline">{streamStatusDisplay.activeCameraCount}台のカメラが接続中</span>
+              <span className="sm:hidden">{streamStatusDisplay.activeCameraCount}台接続中</span>
             </Badge>
           )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {streamStatus.viewerCount !== undefined && (
+          {streamStatusDisplay.viewerCount !== undefined && (
             <Badge variant="outline" className="flex items-center space-x-1 text-xs sm:text-sm">
               <Eye className="h-3 w-3" />
-              <span className="hidden sm:inline">{streamStatus.viewerCount}人が視聴中</span>
-              <span className="sm:hidden">{streamStatus.viewerCount}人視聴中</span>
+              <span className="hidden sm:inline">{streamStatusDisplay.viewerCount}人が視聴中</span>
+              <span className="sm:hidden">{streamStatusDisplay.viewerCount}人視聴中</span>
             </Badge>
           )}
           
           <Badge 
             variant="outline" 
-            className={`flex items-center space-x-1 text-xs sm:text-sm ${getStatusColor(streamStatus.streamHealth)} text-white`}
+            className={`flex items-center space-x-1 text-xs sm:text-sm ${streamStatusDisplay.statusColor} text-white`}
           >
-            {getStatusIcon(streamStatus.streamHealth)}
+            {streamStatusDisplay.statusIcon}
             <span className="hidden sm:inline">接続状態</span>
             <span className="sm:hidden">接続</span>
           </Badge>
@@ -230,31 +396,80 @@ export function StreamViewer({ eventId, streamUrl, eventTitle }: StreamViewerPro
       {/* メインコンテンツエリア - デスクトップでは横並び、モバイルでは縦並び */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* 動画プレーヤー */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-3">
           <Card>
             <CardContent className="p-0">
               <div className="aspect-video">
                 <iframe
-                  src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1`}
+                  src={embedUrl}
                   title={eventTitle}
                   className="w-full h-full rounded-lg"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
-                  onLoad={() => {
-                    // YouTube プレーヤーの読み込み完了時に分析を記録
-                    analyticsService.trackInteraction({
-                      eventId,
-                      action: 'view_start',
-                      metadata: {
-                        ...analyticsService.getDeviceInfo(),
-                        quality: analyticsService.detectVideoQuality(),
-                      },
-                    });
-                  }}
+                  onLoad={handleVideoLoad}
                 />
               </div>
             </CardContent>
           </Card>
+
+          {/* リアクションボタン（useOptimisticによる楽観的UI） */}
+          {streamStatusDisplay.isLive && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-gray-700">リアクション</h3>
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span>タップして反応しよう！</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-center gap-2 mt-3">
+                  <Button
+                    variant={optimisticReactions.userReactions.has('like') ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleReaction('like')}
+                    disabled={optimisticReactions.isSubmitting}
+                    className="flex items-center gap-1 min-w-[60px] touch-manipulation"
+                  >
+                    <ThumbsUp className="h-4 w-4" />
+                    <span className="text-xs">{optimisticReactions.counts.like}</span>
+                  </Button>
+                  
+                  <Button
+                    variant={optimisticReactions.userReactions.has('heart') ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleReaction('heart')}
+                    disabled={optimisticReactions.isSubmitting}
+                    className="flex items-center gap-1 min-w-[60px] touch-manipulation"
+                  >
+                    <Heart className="h-4 w-4" />
+                    <span className="text-xs">{optimisticReactions.counts.heart}</span>
+                  </Button>
+                  
+                  <Button
+                    variant={optimisticReactions.userReactions.has('smile') ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleReaction('smile')}
+                    disabled={optimisticReactions.isSubmitting}
+                    className="flex items-center gap-1 min-w-[60px] touch-manipulation"
+                  >
+                    <Smile className="h-4 w-4" />
+                    <span className="text-xs">{optimisticReactions.counts.smile}</span>
+                  </Button>
+                  
+                  <Button
+                    variant={optimisticReactions.userReactions.has('star') ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleReaction('star')}
+                    disabled={optimisticReactions.isSubmitting}
+                    className="flex items-center gap-1 min-w-[60px] touch-manipulation"
+                  >
+                    <Star className="h-4 w-4" />
+                    <span className="text-xs">{optimisticReactions.counts.star}</span>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* チャットエリア */}
@@ -269,7 +484,7 @@ export function StreamViewer({ eventId, streamUrl, eventTitle }: StreamViewerPro
       </div>
 
       {/* 配信が停止中の場合の案内 */}
-      {!streamStatus.isLive && (
+      {!streamStatusDisplay.isLive && (
         <Alert>
           <AlertDescription className="text-sm">
             現在配信は停止中です。配信が開始されると自動的に表示されます。
@@ -278,7 +493,7 @@ export function StreamViewer({ eventId, streamUrl, eventTitle }: StreamViewerPro
       )}
 
       {/* カメラが接続されていない場合の案内 */}
-      {streamStatus.isLive && streamStatus.activeCameraCount === 0 && (
+      {streamStatusDisplay.isLive && streamStatusDisplay.activeCameraCount === 0 && (
         <Alert>
           <AlertDescription className="text-sm">
             カメラオペレーターの接続を待っています。しばらくお待ちください。

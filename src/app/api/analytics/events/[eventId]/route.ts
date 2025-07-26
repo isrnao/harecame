@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { ViewerAnalytics } from '@/lib/analytics';
 
+// キャッシュ設定: 分析データは5分間キャッシュ
+export const revalidate = 300;
+
 // GET /api/analytics/events/[eventId] - イベントの分析データを取得
 export async function GET(
   request: NextRequest,

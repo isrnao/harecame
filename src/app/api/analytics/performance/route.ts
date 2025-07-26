@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// キャッシュ設定: パフォーマンス統計は10分間キャッシュ
+export const revalidate = 600;
+
 export interface PerformanceData {
   name: string;
   value: number;
