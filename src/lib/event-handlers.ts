@@ -276,7 +276,7 @@ export const useDebouncedHandler = <T extends unknown[]>(
   handler: (...args: T) => void | Promise<void>,
   delay = 300
 ) => {
-  const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const timeoutRef = useRef<number | undefined>(undefined);
 
   return useCallback((...args: T) => {
     if (timeoutRef.current) {
