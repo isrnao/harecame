@@ -1,6 +1,10 @@
 // アプリケーション初期化ロジックの最適化
 // モジュールレベルでの実行により、開発環境での二重実行問題を解決
 
+// 環境変数の定数
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
+
 // 初期化状態を管理するフラグ
 let isAppInitialized = false;
 let isInitializing = false;
@@ -18,10 +22,10 @@ interface AppInitializationConfig {
 
 // デフォルト設定
 const defaultConfig: AppInitializationConfig = {
-  enableAnalytics: process.env.NODE_ENV === 'production',
-  enableErrorReporting: process.env.NODE_ENV === 'production',
-  enablePerformanceMonitoring: process.env.NODE_ENV === 'production',
-  logLevel: process.env.NODE_ENV === 'development' ? 'debug' : 'info',
+  enableAnalytics: IS_PRODUCTION,
+  enableErrorReporting: IS_PRODUCTION,
+  enablePerformanceMonitoring: IS_PRODUCTION,
+  logLevel: IS_DEVELOPMENT ? 'debug' : 'info',
 };
 
 // アプリケーション初期化関数
@@ -107,7 +111,7 @@ async function initializePerformanceMonitoring(): Promise<void> {
 async function initializeErrorReporting(): Promise<void> {
   try {
     // 本番環境では実際の監視サービス（Sentry等）を初期化
-    if (process.env.NODE_ENV === 'production') {
+    if (IS_PRODUCTION) {
       // const Sentry = await import('@sentry/nextjs');
       // Sentry.init({
       //   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
@@ -143,7 +147,7 @@ function setupGlobalErrorHandlers(): void {
     console.error('Unhandled promise rejection:', event.reason);
 
     // エラーレポーティングサービスに送信
-    if (process.env.NODE_ENV === 'production') {
+    if (IS_PRODUCTION) {
       fetch('/api/errors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -166,7 +170,7 @@ function setupGlobalErrorHandlers(): void {
     console.error('Unhandled JavaScript error:', event.error);
 
     // エラーレポーティングサービスに送信
-    if (process.env.NODE_ENV === 'production') {
+    if (IS_PRODUCTION) {
       fetch('/api/errors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -287,7 +291,7 @@ interface WindowWithDevTools extends Window {
 }
 
 // 開発環境でのリセット（ホットリロード対応）
-if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+if (IS_DEVELOPMENT && typeof window !== 'undefined') {
   (window as WindowWithDevTools).__resetAppInitialization = () => {
     isAppInitialized = false;
     isInitializing = false;

@@ -22,7 +22,7 @@ export function QRCodeGenerator({ event }: QRCodeGeneratorProps) {
   // React 19: 計算結果のキャッシュ最適化 - useMemoで高価な計算をキャッシュ
   const cameraJoinUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
-    
+
     const baseUrl = window.location.origin;
     return `${baseUrl}/camera/join?code=${event.participationCode}`;
   }, [event.participationCode]);

@@ -7,7 +7,7 @@ import { Loader2 } from 'lucide-react';
 export default function CameraPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   useEffect(() => {
     const code = searchParams.get('code');
     if (code) {
