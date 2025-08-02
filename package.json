@@ -15,7 +15,9 @@
     "test:coverage": "jest --coverage",
     "perf:lighthouse": "lighthouse http://localhost:3000 --output=html --output-path=./lighthouse-report.html",
     "perf:build-size": "pnpm build && du -sh .next/",
-    "perf:bundle-analyzer": "pnpm build:analyze"
+    "perf:bundle-analyzer": "pnpm build:analyze",
+    "verify:static-routes": "node scripts/verify-static-routes.js verify",
+    "check:static-config": "node scripts/verify-static-routes.js check-config"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",

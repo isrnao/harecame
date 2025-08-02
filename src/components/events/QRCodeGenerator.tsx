@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import QRCode from 'qrcode';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,8 +17,11 @@ export function QRCodeGenerator({ event }: QRCodeGeneratorProps) {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Generate camera join URL
-  const cameraJoinUrl = `${window.location.origin}/camera/join?code=${event.participationCode}`;
+  // React 19: 計算結果のキャッシュ最適化 - useMemoで高価な計算をキャッシュ
+  const cameraJoinUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return `${window.location.origin}/camera/join?code=${event.participationCode}`;
+  }, [event.participationCode]);
 
   // Generate QR code
   useEffect(() => {
@@ -115,7 +118,7 @@ export function QRCodeGenerator({ event }: QRCodeGeneratorProps) {
               {event.participationCode}
             </Badge>
             <Badge variant={event.status === 'live' ? 'default' : 'secondary'}>
-              {event.status === 'live' ? 'ライブ中' : 
+              {event.status === 'live' ? 'ライブ中' :
                event.status === 'scheduled' ? '予定' : '終了'}
             </Badge>
           </div>

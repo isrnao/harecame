@@ -7,10 +7,13 @@ const nextConfig: NextConfig = {
     // Enable optimized package imports
     optimizePackageImports: ['@livekit/components-react', 'lucide-react'],
   },
-  
-  // Server external packages (moved from experimental)
-  serverExternalPackages: ['livekit-server-sdk'],
-  
+
+  // Next.js 15: Pages Router も一括バンドル
+  bundlePagesRouterDependencies: true,
+
+  // Next.js 15: Node.js ネイティブ機能を使う SDK だけ除外
+  serverExternalPackages: ['livekit-server-sdk', 'aws-sdk'],
+
   // Performance optimizations
   compiler: {
     // Remove console.log in production
@@ -18,7 +21,7 @@ const nextConfig: NextConfig = {
       exclude: ['error', 'warn'],
     } : false,
   },
-  
+
   // Bundle analyzer (enable with ANALYZE=true)
   ...(process.env.ANALYZE === 'true' && {
     webpack: (config: unknown) => {
@@ -28,7 +31,7 @@ const nextConfig: NextConfig = {
       return webpackConfig;
     },
   }),
-  
+
   // Image optimization
   images: {
     formats: ['image/webp', 'image/avif'],
@@ -48,15 +51,15 @@ const nextConfig: NextConfig = {
     // Image sizes for different breakpoints
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
-  
+
   // Enable TypeScript strict mode
   typescript: {
     ignoreBuildErrors: false,
   },
-  
+
   // Configure for React 19.1.0
   reactStrictMode: true,
-  
+
   // Headers for performance
   async headers() {
     return [

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
+import { after } from 'next/server';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -33,15 +34,28 @@ export const viewport: Viewport = {
 };
 
 import { ErrorBoundary } from '@/components/error/ErrorBoundary';
+import { AppInitializer } from '@/components/AppInitializer';
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // after() APIを使用してアプリケーション初期化ログを応答後に記録
+  after(async () => {
+    try {
+      console.log('Application layout rendered, logging initialization metrics');
+      // 実際の実装では、アプリケーション起動メトリクスを記録
+      // await logApplicationStartup();
+    } catch (error) {
+      console.error('Failed to log application startup:', error);
+    }
+  });
+
   return (
     <html lang="ja">
       <body className={inter.className}>
+        <AppInitializer />
         <ErrorBoundary>
           {children}
         </ErrorBoundary>

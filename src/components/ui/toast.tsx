@@ -4,12 +4,12 @@ import * as React from 'react';
 import { createContext, useContext, useState, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { 
-  CheckCircle, 
-  AlertCircle, 
-  AlertTriangle, 
-  Info, 
-  X 
+import {
+  CheckCircle,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  X
 } from 'lucide-react';
 
 export interface Toast {
@@ -63,10 +63,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ToastContext.Provider value={{ toasts, addToast, removeToast, clearToasts }}>
+    <ToastContext value={{ toasts, addToast, removeToast, clearToasts }}>
       {children}
       <ToastContainer />
-    </ToastContext.Provider>
+    </ToastContext>
   );
 }
 

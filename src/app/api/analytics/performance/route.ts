@@ -1,4 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
+
+// パフォーマンスメトリクスをデータベースに保存
+async function savePerformanceMetric(data: PerformanceData) {
+  console.log('Saving performance metric to database:', {
+    name: data.name,
+    value: data.value,
+    timestamp: new Date(data.timestamp).toISOString(),
+    url: data.url,
+  });
+
+  // 実際の実装では、データベースに保存
+  // await database.performanceMetrics.create(data);
+}
+
+// パフォーマンストレンドを分析
+async function analyzePerformanceTrends(data: PerformanceData) {
+  console.log('Analyzing performance trends for:', data.name);
+
+  // 実際の実装では、トレンド分析を実行
+  // - 過去のデータと比較
+  // - 異常値の検出
+  // - アラートの送信
+}
 
 export interface PerformanceData {
   name: string;
@@ -43,11 +67,16 @@ export async function POST(request: NextRequest) {
       console.warn(`Performance issue detected - ${data.name}: ${data.value} (threshold: ${threshold})`);
     }
 
-    // 本番環境では、ここでデータベースやモニタリングサービスに送信
-    // 例: Supabase、DataDog、New Relic等
-    if (process.env.NODE_ENV === 'production') {
-      // await savePerformanceMetric(data);
-    }
+    // after() APIを使用してパフォーマンスデータを応答後に保存・分析
+    after(async () => {
+      try {
+        await savePerformanceMetric(data);
+        await analyzePerformanceTrends(data);
+        console.log('Performance data processed:', data.name);
+      } catch (error) {
+        console.error('Failed to process performance data:', error);
+      }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

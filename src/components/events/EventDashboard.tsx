@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, startTransition, useReducer, useMemo, useDeferredValue } from "react";
 import {
   Card,
   CardContent,
@@ -41,25 +41,95 @@ interface EventDashboardProps {
   initialStreamStatus?: StreamStatusClient;
 }
 
+// React 19: 複雑な状態依存関係の整理 - useReducerで状態管理を統一
+interface DashboardState {
+  cameras: CameraConnectionClient[];
+  streamStatus: StreamStatusClient | null;
+  youtubeStats: YouTubeStreamStats | null;
+  lastUpdated: Date | null;
+  error: string | null;
+  activeCamera: CameraConnectionClient | null;
+}
+
+type DashboardAction =
+  | { type: 'UPDATE_DATA'; payload: { cameras: CameraConnectionClient[]; streamStatus: StreamStatusClient | null; youtubeStats: YouTubeStreamStats | null } }
+  | { type: 'SET_ERROR'; payload: string }
+  | { type: 'CLEAR_ERROR' }
+  | { type: 'SET_ACTIVE_CAMERA'; payload: CameraConnectionClient | null };
+
+function dashboardReducer(state: DashboardState, action: DashboardAction): DashboardState {
+  switch (action.type) {
+    case 'UPDATE_DATA': {
+      const { cameras, streamStatus, youtubeStats } = action.payload;
+
+      // activeCameraの計算をreducer内で実行
+      const activeCameras = cameras.filter((camera) => camera.status === "active");
+      let newActiveCamera: CameraConnectionClient | null = null;
+
+      if (activeCameras.length > 0) {
+        const mostRecent = activeCameras.reduce((latest, current) => {
+          return new Date(current.joinedAt) > new Date(latest.joinedAt) ? current : latest;
+        });
+
+        // 現在のactiveCameraと同じ場合は変更しない（参照の安定性）
+        if (state.activeCamera && state.activeCamera.id === mostRecent.id) {
+          newActiveCamera = state.activeCamera;
+        } else {
+          newActiveCamera = mostRecent;
+        }
+      }
+
+      return {
+        ...state,
+        cameras,
+        streamStatus,
+        youtubeStats,
+        lastUpdated: new Date(),
+        error: null, // データ更新成功時はエラーをクリア
+        activeCamera: newActiveCamera,
+      };
+    }
+    case 'SET_ERROR':
+      return {
+        ...state,
+        error: action.payload,
+      };
+    case 'CLEAR_ERROR':
+      return {
+        ...state,
+        error: null,
+      };
+    case 'SET_ACTIVE_CAMERA':
+      return {
+        ...state,
+        activeCamera: action.payload,
+      };
+    default:
+      return state;
+  }
+}
+
 export function EventDashboard({
   event,
   initialCameras = [],
   initialStreamStatus,
 }: EventDashboardProps) {
-  const [cameras, setCameras] =
-    useState<CameraConnectionClient[]>(initialCameras);
-  const [streamStatus, setStreamStatus] = useState<StreamStatusClient | null>(
-    initialStreamStatus || null
-  );
-  const [youtubeStats, setYoutubeStats] = useState<YouTubeStreamStats | null>(
-    null
-  );
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // React 19: 複雑な状態依存関係の整理 - useReducerで統一的な状態管理
+  const [dashboardState, dispatch] = useReducer(dashboardReducer, {
+    cameras: initialCameras,
+    streamStatus: initialStreamStatus || null,
+    youtubeStats: null,
+    lastUpdated: null,
+    error: null,
+    activeCamera: null,
+  });
+
+  // 分割代入で個別の状態にアクセス
+  const { cameras, streamStatus, youtubeStats, lastUpdated, error, activeCamera } = dashboardState;
 
   // カスタムフックを使用してローディング状態を管理
   const { isLoading, withLoadingProtection } = useLoadingState(false);
-  
+
   // API呼び出し管理フック
   const { fetchEventData, cleanup } = useEventDashboardApi();
 
@@ -74,23 +144,37 @@ export function EventDashboard({
       if (!isMountedRef.current) return;
 
       try {
-        setError(null);
+        dispatch({ type: 'CLEAR_ERROR' });
         const result = await fetchEventData({
           eventId,
           youtubeVideoId,
         });
 
         if (isMountedRef.current) {
-          setCameras(result.cameras);
-          setStreamStatus(result.streamStatus);
-          setYoutubeStats(result.youtubeStats);
-          setLastUpdated(new Date());
+          // React 19: 計算チェーン最適化 - 関連する状態を一括更新
+          startTransition(() => {
+            // 状態の依存関係を考慮した順序で更新
+            dispatch({
+              type: 'UPDATE_DATA',
+              payload: {
+                cameras: result.cameras,
+                streamStatus: result.streamStatus,
+                youtubeStats: result.youtubeStats,
+              },
+            });
+
+            // activeCameraの計算も同じバッチ内で実行される
+            // （computedActiveCameraの計算により自動的に更新される）
+          });
           console.log('Dashboard data updated successfully');
         }
       } catch (error) {
         if (isMountedRef.current && error instanceof Error && error.name !== 'AbortError') {
           const errorMessage = error.message || 'データの更新に失敗しました';
-          setError(errorMessage);
+          // React 19: バッチング機能を活用してエラー状態更新を最適化
+          startTransition(() => {
+            dispatch({ type: 'SET_ERROR', payload: errorMessage });
+          });
           console.error('Failed to update dashboard data:', error);
         }
       }
@@ -102,7 +186,7 @@ export function EventDashboard({
   const refreshData = useCallback(async () => {
     console.log('Manual refresh triggered');
     const currentEvent = eventRef.current;
-    
+
     await withLoadingProtection(async () => {
       await updateDashboardData(currentEvent.id, currentEvent.youtubeVideoId);
     });
@@ -154,8 +238,22 @@ export function EventDashboard({
     };
   }, [updateDashboardData, cleanup]);
 
-  const activeCameras = cameras.filter((camera) => camera.status === "active");
-  const totalCameras = cameras.length;
+  // React 19: 計算結果のキャッシュ最適化 - useMemoで高価な計算をキャッシュ
+  const activeCamerasCalculated = useMemo(() =>
+    cameras.filter((camera) => camera.status === "active"),
+    [cameras]
+  );
+
+  // React 19: useDeferredValue(initialValue)を活用して初期値を設定
+  const activeCameras = useDeferredValue(activeCamerasCalculated, []);
+
+  const totalCameras = useMemo(() => cameras.length, [cameras]);
+
+  // カメラ状態の統計情報は現在使用していないため削除
+  // 将来の機能拡張で必要になった場合は、useMemoで実装する
+
+  // React 19: useReducerで状態の依存関係を統一的に管理
+  // activeCameraの計算はreducer内で実行されるため、ここでは不要
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -423,6 +521,8 @@ export function EventDashboard({
         eventId={event.id}
         cameras={cameras}
         streamStatus={streamStatus}
+        activeCamera={activeCamera}
+        onActiveCameraChange={(camera) => dispatch({ type: 'SET_ACTIVE_CAMERA', payload: camera })}
       />
 
       {/* Stream Controls - モバイル最適化 */}
