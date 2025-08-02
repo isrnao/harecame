@@ -34,6 +34,9 @@ import { StreamManagementPanel } from "./StreamManagementPanel";
 import { StreamNotifications } from "./StreamNotifications";
 import { useLoadingState } from "@/hooks/useLoadingState";
 import { useEventDashboardApi } from "@/hooks/useEventDashboardApi";
+import {
+  useClipboardHandler
+} from "@/lib/event-handlers";
 
 interface EventDashboardProps {
   event: EventClient;
@@ -255,15 +258,16 @@ export function EventDashboard({
   // React 19: useReducerで状態の依存関係を統一的に管理
   // activeCameraの計算はreducer内で実行されるため、ここでは不要
 
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      // トースト通知を表示（実装時にToastProviderが必要）
+  // 共通のクリップボードハンドラーを使用
+  const handleClipboardCopy = useClipboardHandler(
+    (text) => {
       console.log("Copied to clipboard:", text);
-    } catch (error) {
-      console.error("Failed to copy to clipboard:", error);
+      // トースト通知を表示（実装時にToastProviderが必要）
+    },
+    (error) => {
+      dispatch({ type: 'SET_ERROR', payload: error.message });
     }
-  };
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -444,7 +448,7 @@ export function EventDashboard({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => copyToClipboard(event.participationCode)}
+                  onClick={() => handleClipboardCopy(event.participationCode)}
                   className="min-h-[40px] min-w-[40px] touch-manipulation"
                   aria-label="参加コードをコピー"
                 >
@@ -468,7 +472,7 @@ export function EventDashboard({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => copyToClipboard(event.youtubeStreamUrl!)}
+                    onClick={() => handleClipboardCopy(event.youtubeStreamUrl!)}
                     className="min-h-[40px] min-w-[40px] touch-manipulation"
                     aria-label="配信URLをコピー"
                   >

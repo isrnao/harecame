@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import QRCode from 'qrcode';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { QrCode, Download, Copy, ExternalLink } from 'lucide-react';
 import type { EventClient } from '@/types';
+import { useClipboardHandler } from '@/lib/event-handlers';
 
 interface QRCodeGeneratorProps {
   event: EventClient;
@@ -16,48 +17,66 @@ interface QRCodeGeneratorProps {
 export function QRCodeGenerator({ event }: QRCodeGeneratorProps) {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const copyToClipboard = useClipboardHandler();
 
   // React 19: 計算結果のキャッシュ最適化 - useMemoで高価な計算をキャッシュ
   const cameraJoinUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
-    return `${window.location.origin}/camera/join?code=${event.participationCode}`;
+    
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/camera/join?code=${event.participationCode}`;
   }, [event.participationCode]);
 
-  // Generate QR code
+  // React 19: Ref cleanup 最適化パターン
+  const cleanupRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
+    if (!cameraJoinUrl) return;
+
+    let isCancelled = false;
+    setIsGenerating(true);
+
     const generateQRCode = async () => {
-      setIsGenerating(true);
       try {
         const dataUrl = await QRCode.toDataURL(cameraJoinUrl, {
           width: 256,
           margin: 2,
           color: {
             dark: '#000000',
-            light: '#FFFFFF',
+            light: '#FFFFFF'
           },
-          errorCorrectionLevel: 'M',
+          errorCorrectionLevel: 'M'
         });
-        setQrCodeDataUrl(dataUrl);
+
+        if (!isCancelled) {
+          setQrCodeDataUrl(dataUrl);
+        }
       } catch (error) {
-        console.error('Failed to generate QR code:', error);
+        console.error('QRコード生成エラー:', error);
+        if (!isCancelled) {
+          setQrCodeDataUrl('');
+        }
       } finally {
-        setIsGenerating(false);
+        if (!isCancelled) {
+          setIsGenerating(false);
+        }
       }
     };
 
-    if (typeof window !== 'undefined') {
-      generateQRCode();
-    }
-  }, [cameraJoinUrl]);
+    generateQRCode();
 
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      // TODO: Add toast notification
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
-    }
-  };
+    // React 19: クリーンアップ関数をrefに保存
+    cleanupRef.current = () => {
+      isCancelled = true;
+    };
+
+    return () => {
+      isCancelled = true;
+      if (cleanupRef.current) {
+        cleanupRef.current();
+      }
+    };
+  }, [cameraJoinUrl]);
 
   const downloadQRCode = () => {
     if (!qrCodeDataUrl) return;
