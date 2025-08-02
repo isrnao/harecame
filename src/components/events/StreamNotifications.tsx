@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useDeferredValue } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  AlertCircle, 
-  Info, 
-  X, 
+import {
+  AlertCircle,
+  Info,
+  X,
   ArrowRight,
   Video,
   VideoOff
@@ -34,10 +34,13 @@ export function StreamNotifications({ cameras }: StreamNotificationsProps) {
   const [notifications, setNotifications] = useState<StreamNotification[]>([]);
   const previousCamerasRef = useRef<CameraConnectionClient[]>([]);
 
+  // React 19: useDeferredValue(initialValue)を活用して通知の遅延表示を実装
+  const deferredNotifications = useDeferredValue(notifications, []);
+
   // Monitor camera changes and generate notifications
   useEffect(() => {
     const previousCameras = previousCamerasRef.current;
-    
+
     if (previousCameras.length === 0) {
       previousCamerasRef.current = cameras;
       return;
@@ -54,7 +57,7 @@ export function StreamNotifications({ cameras }: StreamNotificationsProps) {
     // Check for new camera connections
     cameras.forEach(camera => {
       const previousCamera = previousCameras.find(prev => prev.id === camera.id);
-      
+
       if (!previousCamera) {
         // New camera connected
         newNotifications.push({
@@ -105,7 +108,7 @@ export function StreamNotifications({ cameras }: StreamNotificationsProps) {
     // Check for disconnected cameras
     previousCameras.forEach(previousCamera => {
       const currentCamera = cameras.find(current => current.id === previousCamera.id);
-      
+
       if (!currentCamera) {
         // Camera disconnected
         newNotifications.push({
@@ -130,9 +133,9 @@ export function StreamNotifications({ cameras }: StreamNotificationsProps) {
   // Auto-hide notifications after 5 seconds
   useEffect(() => {
     const timer = setTimeout(() => {
-      setNotifications(prev => 
-        prev.filter(notification => 
-          !notification.autoHide || 
+      setNotifications(prev =>
+        prev.filter(notification =>
+          !notification.autoHide ||
           Date.now() - notification.timestamp.getTime() < 5000
         )
       );
@@ -141,9 +144,10 @@ export function StreamNotifications({ cameras }: StreamNotificationsProps) {
     return () => clearTimeout(timer);
   }, [notifications]);
 
-  const dismissNotification = (id: string) => {
+  // React 19: 関数のメモ化 - useCallbackで関数のメモ化
+  const dismissNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(notification => notification.id !== id));
-  };
+  }, []);
 
   const getNotificationIcon = (type: StreamNotification['type']) => {
     switch (type) {
@@ -179,14 +183,14 @@ export function StreamNotifications({ cameras }: StreamNotificationsProps) {
     }
   };
 
-  if (notifications.length === 0) {
+  if (deferredNotifications.length === 0) {
     return null;
   }
 
   return (
     <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
-      {notifications.map((notification) => (
-        <Alert 
+      {deferredNotifications.map((notification) => (
+        <Alert
           key={notification.id}
           className={`${getNotificationColor(notification.type)} shadow-lg animate-in slide-in-from-right-full duration-300`}
         >

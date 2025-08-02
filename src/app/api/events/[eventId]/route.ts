@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from 'next/server';
 import {
   EventService,
   CameraConnectionService,
@@ -16,6 +17,33 @@ import {
 import { updateEventSchema } from "@/lib/validation";
 import { isValidUUID } from "@/lib/validation";
 import type { EventClient } from "@/types";
+
+// イベントアクセスログの型定義
+interface EventAccessLog {
+  eventId: string;
+  userAgent: string;
+  timestamp: Date;
+  includeCameras: boolean;
+  includeStatus: boolean;
+  eventStatus: string;
+  ip: string;
+}
+
+// イベントアクセスを記録する関数
+async function logEventAccess(accessLog: EventAccessLog) {
+  console.log('Event API access logged:', {
+    eventId: accessLog.eventId,
+    timestamp: accessLog.timestamp.toISOString(),
+    eventStatus: accessLog.eventStatus,
+    includeCameras: accessLog.includeCameras,
+    includeStatus: accessLog.includeStatus,
+    ip: accessLog.ip,
+    userAgent: accessLog.userAgent.substring(0, 100), // ログの簡略化
+  });
+
+  // 実際の実装では、データベースに保存
+  // await database.eventAccess.create(accessLog);
+}
 
 // GET /api/events/[eventId] - Get event by ID with related data
 export const GET = withErrorHandling(
@@ -80,6 +108,23 @@ export const GET = withErrorHandling(
         eventId
       );
     }
+
+    // after() APIを使用してイベントアクセスログを応答後に記録
+    after(async () => {
+      try {
+        await logEventAccess({
+          eventId,
+          userAgent: request.headers.get('user-agent') || 'unknown',
+          timestamp: new Date(),
+          includeCameras,
+          includeStatus,
+          eventStatus: event.status,
+          ip: request.headers.get('x-forwarded-for') || 'unknown',
+        });
+      } catch (error) {
+        console.error('Failed to log event access:', error);
+      }
+    });
 
     return NextResponse.json(
       {

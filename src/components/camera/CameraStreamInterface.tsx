@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  startTransition,
+} from "react";
+
 import {
   Room,
   RoomEvent,
@@ -95,6 +102,9 @@ export function CameraStreamInterface({
   const [isInitializingMedia, setIsInitializingMedia] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isDisconnected, setIsDisconnected] = useState(false);
+
+  // 初期化フラグを管理するRef（コンポーネントインスタンス固有）
+  const isMediaInitializationInProgress = useRef(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const localVideoTrack = useRef<LocalVideoTrack | null>(null);
@@ -208,6 +218,41 @@ export function CameraStreamInterface({
     }
   }, [recommendedQuality, networkQuality]);
 
+  // Update camera connection status in database
+  const updateCameraStatus = useCallback(
+    async (status: "active" | "inactive" | "error") => {
+      if (!cameraConnectionId) return;
+
+      try {
+        const streamQuality = streamStats
+          ? {
+              resolution: streamStats.resolution,
+              frameRate: streamStats.frameRate,
+              bitrate: streamStats.bitrate,
+              codec: streamStats.codec,
+            }
+          : undefined;
+
+        await fetch(
+          `/api/events/${eventId}/cameras/${cameraConnectionId}/status`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              status,
+              streamQuality,
+            }),
+          }
+        );
+      } catch (error) {
+        console.error("Failed to update camera status:", error);
+      }
+    },
+    [cameraConnectionId, streamStats, eventId]
+  );
+
   // Connect to LiveKit room with retry logic
   const connectToRoom = useCallback(async () => {
     if (isConnecting || isConnected) return;
@@ -264,7 +309,15 @@ export function CameraStreamInterface({
 
       console.log("Successfully published video and audio tracks");
 
-      setIsConnected(true);
+      // React 19: バッチング機能を活用して状態更新を最適化
+      startTransition(() => {
+        setIsConnected(true);
+
+        // 接続成功時に親への状態通知を直接実行
+        if (cameraConnectionId) {
+          updateCameraStatus("active");
+        }
+      });
     } catch (error) {
       console.error("Failed to connect to room:", error);
 
@@ -278,8 +331,15 @@ export function CameraStreamInterface({
         localAudioTrack.current = null;
       }
 
-      // 状態をリセット
-      setIsConnected(false);
+      // React 19: バッチング機能を活用して状態更新を最適化
+      startTransition(() => {
+        setIsConnected(false);
+
+        // 接続失敗時に親への状態通知を直接実行
+        if (cameraConnectionId) {
+          updateCameraStatus("error");
+        }
+      });
 
       if (error instanceof Error) {
         if (error.message.includes("WebSocket")) {
@@ -311,6 +371,8 @@ export function CameraStreamInterface({
     roomToken,
     room,
     retryWithBackoff,
+    cameraConnectionId,
+    updateCameraStatus,
   ]);
 
   // Disconnect from room
@@ -354,9 +416,18 @@ export function CameraStreamInterface({
         console.log("Room already disconnected, skipping disconnect call");
       }
 
-      setIsConnected(false);
-      setIsConnecting(false);
-      setIsDisconnected(true);
+      // React 19: バッチング機能を活用して状態更新を最適化
+      startTransition(() => {
+        setIsConnected(false);
+        setIsConnecting(false);
+        setIsDisconnected(true);
+
+        // 切断時に親への状態通知を直接実行
+        if (cameraConnectionId) {
+          updateCameraStatus("inactive");
+        }
+      });
+
       // メディアは初期化されたままにして、再接続時に再利用できるようにする
 
       // リソース監視のクリーンアップ
@@ -375,11 +446,18 @@ export function CameraStreamInterface({
       console.log("Room disconnection completed");
     } catch (error) {
       console.error("Failed to disconnect from room:", error);
-      // Even if disconnect fails, reset local state
-      setIsConnected(false);
-      setIsMediaInitialized(false);
+      // React 19: バッチング機能を活用して状態更新を最適化
+      startTransition(() => {
+        setIsConnected(false);
+        setIsMediaInitialized(false);
+
+        // 切断失敗時にも親への状態通知を実行
+        if (cameraConnectionId) {
+          updateCameraStatus("inactive");
+        }
+      });
     }
-  }, [isConnected, room]);
+  }, [isConnected, room, cameraConnectionId, updateCameraStatus]);
 
   // Toggle video
   const toggleVideo = useCallback(async () => {
@@ -412,41 +490,6 @@ export function CameraStreamInterface({
       console.error("Failed to toggle audio:", error);
     }
   }, [isAudioEnabled]);
-
-  // Update camera connection status in database
-  const updateCameraStatus = useCallback(
-    async (status: "active" | "inactive" | "error") => {
-      if (!cameraConnectionId) return;
-
-      try {
-        const streamQuality = streamStats
-          ? {
-              resolution: streamStats.resolution,
-              frameRate: streamStats.frameRate,
-              bitrate: streamStats.bitrate,
-              codec: streamStats.codec,
-            }
-          : undefined;
-
-        await fetch(
-          `/api/events/${eventId}/cameras/${cameraConnectionId}/status`,
-          {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              status,
-              streamQuality,
-            }),
-          }
-        );
-      } catch (error) {
-        console.error("Failed to update camera status:", error);
-      }
-    },
-    [cameraConnectionId, streamStats, eventId]
-  );
 
   // Get connection quality icon
   const getConnectionQualityIcon = () => {
@@ -601,9 +644,18 @@ export function CameraStreamInterface({
     let isMounted = true;
 
     const initializeMediaOnMount = async () => {
-      if (isInitializingMedia || isMediaInitialized) return;
+      // 開発環境での二重実行を防ぐ
+      if (
+        isInitializingMedia ||
+        isMediaInitialized ||
+        isMediaInitializationInProgress.current
+      ) {
+        return;
+      }
 
+      isMediaInitializationInProgress.current = true;
       setIsInitializingMedia(true);
+
       try {
         await initializeMedia();
         if (isMounted) {
@@ -619,6 +671,7 @@ export function CameraStreamInterface({
         if (isMounted) {
           setIsInitializingMedia(false);
         }
+        isMediaInitializationInProgress.current = false;
       }
     };
 
@@ -628,6 +681,10 @@ export function CameraStreamInterface({
     return () => {
       isMounted = false;
       clearTimeout(timer);
+      // 開発環境でのクリーンアップ時にフラグをリセット
+      if (process.env.NODE_ENV === "development") {
+        isMediaInitializationInProgress.current = false;
+      }
     };
   }, [initializeMedia, isInitializingMedia, isMediaInitialized]);
 
@@ -642,15 +699,16 @@ export function CameraStreamInterface({
   }, []);
 
   // Monitor connection state changes and update camera status
-  useEffect(() => {
-    if (!cameraConnectionId) return;
-
-    if (isConnected) {
-      updateCameraStatus("active");
-    } else {
-      updateCameraStatus("inactive");
-    }
-  }, [isConnected, cameraConnectionId, updateCameraStatus]);
+  // React 19: useEffectで親への通知を行うのではなく、イベントハンドラーで直接実行
+  // useEffect(() => {
+  //   if (!cameraConnectionId) return;
+  //
+  //   if (isConnected) {
+  //     updateCameraStatus("active");
+  //   } else {
+  //     updateCameraStatus("inactive");
+  //   }
+  // }, [isConnected, cameraConnectionId, updateCameraStatus]);
 
   // Cleanup on unmount
   const cleanupResources = useCallback(() => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 
 export interface NetworkStatus {
   isOnline: boolean;
@@ -16,46 +16,131 @@ export interface RetryConfig {
   backoffFactor: number;
 }
 
-export function useNetworkStatus() {
-  const [networkStatus, setNetworkStatus] = useState<NetworkStatus>({
+// External store for network status synchronization
+class NetworkStatusStore {
+  private listeners = new Set<() => void>();
+  private networkStatus: NetworkStatus = {
     isOnline: true,
     isSlowConnection: false,
     connectionType: 'unknown',
     lastChecked: new Date(),
-  });
+  };
+  private cachedSnapshot: NetworkStatus | null = null;
 
-  const [retryCount, setRetryCount] = useState(0);
+  constructor() {
+    if (typeof window !== 'undefined') {
+      this.initializeNetworkStatus();
+      this.setupEventListeners();
+    }
+  }
 
-  // ネットワーク状態を更新
-  const updateNetworkStatus = useCallback(() => {
-    const isOnline = navigator.onLine;
-    const connection = (navigator as unknown as { 
-      connection?: unknown; 
-      mozConnection?: unknown; 
-      webkitConnection?: unknown; 
-    }).connection || 
-    (navigator as unknown as { mozConnection?: unknown }).mozConnection || 
+  private initializeNetworkStatus() {
+    this.updateNetworkStatus();
+  }
+
+  private setupEventListeners() {
+    const handleOnline = () => {
+      console.log('Network: Back online');
+      this.updateNetworkStatus();
+    };
+
+    const handleOffline = () => {
+      console.log('Network: Gone offline');
+      this.updateNetworkStatus();
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Connection API change listener
+    const connection = this.getConnection();
+    if (connection && typeof connection === 'object' && 'addEventListener' in connection) {
+      const conn = connection as { addEventListener: (event: string, handler: () => void) => void };
+      conn.addEventListener('change', () => this.updateNetworkStatus());
+    }
+  }
+
+  private getConnection() {
+    return (navigator as unknown as {
+      connection?: unknown;
+      mozConnection?: unknown;
+      webkitConnection?: unknown;
+    }).connection ||
+    (navigator as unknown as { mozConnection?: unknown }).mozConnection ||
     (navigator as unknown as { webkitConnection?: unknown }).webkitConnection;
+  }
+
+  private updateNetworkStatus() {
+    const isOnline = navigator.onLine;
+    const connection = this.getConnection();
 
     let isSlowConnection = false;
     let connectionType = 'unknown';
 
     if (connection) {
-      const conn = connection as { 
-        effectiveType?: string; 
+      const conn = connection as {
+        effectiveType?: string;
       };
       connectionType = conn.effectiveType || 'unknown';
-      // 2G以下を低速接続と判定
       isSlowConnection = ['slow-2g', '2g'].includes(conn.effectiveType || '');
     }
 
-    setNetworkStatus({
+    this.networkStatus = {
       isOnline,
       isSlowConnection,
       connectionType,
       lastChecked: new Date(),
-    });
-  }, []);
+    };
+
+    // キャッシュを無効化
+    this.cachedSnapshot = null;
+    this.notifyListeners();
+  }
+
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  getSnapshot = () => {
+    if (!this.cachedSnapshot) {
+      this.cachedSnapshot = this.networkStatus;
+    }
+    return this.cachedSnapshot;
+  };
+
+  getServerSnapshot = () => {
+    return {
+      isOnline: true,
+      isSlowConnection: false,
+      connectionType: 'unknown',
+      lastChecked: new Date(),
+    };
+  };
+
+  private notifyListeners = () => {
+    this.listeners.forEach(listener => listener());
+  };
+
+  // Public method to force update
+  forceUpdate = () => {
+    this.updateNetworkStatus();
+  };
+}
+
+const networkStatusStore = new NetworkStatusStore();
+
+export function useNetworkStatus() {
+  // Use external store for network status synchronization
+  const networkStatus = useSyncExternalStore(
+    networkStatusStore.subscribe,
+    networkStatusStore.getSnapshot,
+    networkStatusStore.getServerSnapshot
+  );
+
+  const [retryCount, setRetryCount] = useState(0);
 
   // 指数バックオフによるリトライ
   const retryWithBackoff = useCallback(async <T>(
@@ -77,7 +162,7 @@ export function useNetworkStatus() {
         return result;
       } catch (error) {
         lastError = error as Error;
-        
+
         if (attempt === config.maxRetries) {
           break; // 最大試行回数に達した
         }
@@ -110,38 +195,24 @@ export function useNetworkStatus() {
     }
   }, []);
 
-  // ネットワーク状態の監視
+  // 接続状態の定期チェック（30秒間隔）
   useEffect(() => {
-    updateNetworkStatus();
-
-    const handleOnline = () => {
-      console.log('Network: Back online');
-      updateNetworkStatus();
-    };
-
-    const handleOffline = () => {
-      console.log('Network: Gone offline');
-      updateNetworkStatus();
-    };
-
-    // イベントリスナーを追加
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    // 接続状態の定期チェック（30秒間隔）
     const interval = setInterval(async () => {
       const isConnected = await testConnection();
       if (isConnected !== networkStatus.isOnline) {
-        updateNetworkStatus();
+        networkStatusStore.forceUpdate();
       }
     }, 30000);
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
     };
-  }, [updateNetworkStatus, testConnection, networkStatus.isOnline]);
+  }, [testConnection, networkStatus.isOnline]);
+
+  // updateNetworkStatus関数をストアの更新メソッドにマップ
+  const updateNetworkStatus = useCallback(() => {
+    networkStatusStore.forceUpdate();
+  }, []);
 
   return {
     networkStatus,

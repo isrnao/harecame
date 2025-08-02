@@ -1,17 +1,17 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { 
-  Video, 
-  VideoOff, 
-  Wifi, 
-  WifiOff, 
-  Smartphone, 
-  Monitor, 
+import {
+  Video,
+  VideoOff,
+  Wifi,
+  WifiOff,
+  Smartphone,
+  Monitor,
   Tablet,
   Signal,
   SignalHigh,
@@ -28,10 +28,10 @@ interface CameraStatusGridProps {
   onCameraSelect?: (camera: CameraConnectionClient) => void;
 }
 
-export function CameraStatusGrid({ 
-  eventId, 
-  initialCameras = [], 
-  onCameraSelect 
+export function CameraStatusGrid({
+  eventId,
+  initialCameras = [],
+  onCameraSelect
 }: CameraStatusGridProps) {
   const [cameras, setCameras] = useState<CameraConnectionClient[]>(initialCameras);
   const [selectedCamera, setSelectedCamera] = useState<string | null>(null);
@@ -104,7 +104,7 @@ export function CameraStatusGrid({
     }
 
     const score = (quality.frameRate / 30) * 0.5 + (quality.bitrate / 5000) * 0.5;
-    
+
     if (score > 0.8) return <Signal className="h-4 w-4 text-green-600" />;
     if (score > 0.6) return <SignalHigh className="h-4 w-4 text-blue-600" />;
     if (score > 0.3) return <SignalMedium className="h-4 w-4 text-yellow-600" />;
@@ -113,10 +113,10 @@ export function CameraStatusGrid({
 
   const getConnectionQuality = (quality?: { frameRate?: number; bitrate?: number }) => {
     if (!quality?.frameRate || !quality?.bitrate) return 0;
-    
+
     const frameRateScore = Math.min(quality.frameRate / 30, 1) * 50;
     const bitrateScore = Math.min(quality.bitrate / 5000, 1) * 50;
-    
+
     return Math.round(frameRateScore + bitrateScore);
   };
 
@@ -125,10 +125,17 @@ export function CameraStatusGrid({
     onCameraSelect?.(camera);
   };
 
-  const activeCameras = cameras.filter(camera => camera.status === 'active');
-  const connectingCameras = cameras.filter(camera => camera.status === 'connecting');
-  const inactiveCameras = cameras.filter(camera => camera.status === 'inactive');
-  const errorCameras = cameras.filter(camera => camera.status === 'error');
+  // React 19: 計算結果のキャッシュ最適化 - useMemoで高価な計算をキャッシュ
+  const camerasByStatus = useMemo(() => {
+    const active = cameras.filter(camera => camera.status === 'active');
+    const connecting = cameras.filter(camera => camera.status === 'connecting');
+    const inactive = cameras.filter(camera => camera.status === 'inactive');
+    const error = cameras.filter(camera => camera.status === 'error');
+
+    return { active, connecting, inactive, error };
+  }, [cameras]);
+
+  const { active: activeCameras, connecting: connectingCameras, inactive: inactiveCameras, error: errorCameras } = camerasByStatus;
 
   return (
     <div className="space-y-6">
@@ -179,7 +186,7 @@ export function CameraStatusGrid({
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {cameras.map((camera) => (
-            <Card 
+            <Card
               key={camera.id}
               className={`cursor-pointer transition-all hover:shadow-md ${
                 selectedCamera === camera.id ? 'ring-2 ring-primary' : ''
@@ -204,7 +211,7 @@ export function CameraStatusGrid({
                   </Badge>
                 </div>
               </CardHeader>
-              
+
               <CardContent className="space-y-3">
                 {/* Connection Quality */}
                 <div>
@@ -217,8 +224,8 @@ export function CameraStatusGrid({
                       </span>
                     </div>
                   </div>
-                  <Progress 
-                    value={getConnectionQuality(camera.streamQuality)} 
+                  <Progress
+                    value={getConnectionQuality(camera.streamQuality)}
                     className="h-2"
                   />
                 </div>
@@ -293,7 +300,7 @@ export function CameraStatusGrid({
             {(() => {
               const camera = cameras.find(c => c.id === selectedCamera);
               if (!camera) return <p>カメラが見つかりません</p>;
-              
+
               return (
                 <div className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
@@ -324,7 +331,7 @@ export function CameraStatusGrid({
                       <p className="mt-1">{camera.deviceInfo.screenResolution || '不明'}</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm">
                       カメラを優先表示

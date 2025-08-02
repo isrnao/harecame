@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useSyncExternalStore } from 'react';
 
 export interface NetworkQuality {
   effectiveType: '4g' | '3g' | '2g' | 'slow-2g' | 'unknown';
@@ -17,88 +17,132 @@ export interface VideoQualitySettings {
   bitrate: number;
 }
 
-export function useNetworkQuality() {
-  const [networkQuality, setNetworkQuality] = useState<NetworkQuality>({
+// External store for network quality synchronization
+class NetworkQualityStore {
+  private listeners = new Set<() => void>();
+  private networkQuality: NetworkQuality = {
     effectiveType: 'unknown',
     downlink: 0,
     rtt: 0,
     saveData: false,
     isSupported: false,
-  });
-
-  const [recommendedQuality, setRecommendedQuality] = useState<VideoQualitySettings>({
+  };
+  private recommendedQuality: VideoQualitySettings = {
     width: 1280,
     height: 720,
     frameRate: 30,
     bitrate: 2500,
-  });
+  };
+  private cachedSnapshot: { networkQuality: NetworkQuality; recommendedQuality: VideoQualitySettings } | null = null;
 
-  useEffect(() => {
-    const updateNetworkInfo = () => {
-      const connection = (navigator as unknown as { 
-        connection?: unknown; 
-        mozConnection?: unknown; 
-        webkitConnection?: unknown; 
-      }).connection || 
-      (navigator as unknown as { mozConnection?: unknown }).mozConnection || 
-      (navigator as unknown as { webkitConnection?: unknown }).webkitConnection;
+  constructor() {
+    if (typeof window !== 'undefined') {
+      this.initializeNetworkQuality();
+      this.setupEventListeners();
+    }
+  }
 
-      if (connection) {
-        const conn = connection as { 
-          effectiveType?: string; 
-          downlink?: number; 
-          rtt?: number; 
-          saveData?: boolean; 
-          addEventListener?: (event: string, handler: () => void) => void;
-          removeEventListener?: (event: string, handler: () => void) => void;
-        };
-        const quality: NetworkQuality = {
-          effectiveType: (conn.effectiveType as '4g' | '3g' | '2g' | 'slow-2g') || 'unknown',
-          downlink: conn.downlink || 0,
-          rtt: conn.rtt || 0,
-          saveData: conn.saveData || false,
-          isSupported: true,
-        };
-
-        setNetworkQuality(quality);
-
-        // 品質に基づく推奨設定を計算
-        const recommended = calculateRecommendedQuality(quality);
-        setRecommendedQuality(recommended);
-      } else {
-        setNetworkQuality(prev => ({ ...prev, isSupported: false }));
-      }
-    };
-
-    // 初期チェック
-    updateNetworkInfo();
-
-    // ネットワーク変更の監視
-    const connection = (navigator as unknown as { 
-      connection?: unknown; 
-      mozConnection?: unknown; 
-      webkitConnection?: unknown; 
-    }).connection || 
-    (navigator as unknown as { mozConnection?: unknown }).mozConnection || 
+  private getConnection() {
+    return (navigator as unknown as {
+      connection?: unknown;
+      mozConnection?: unknown;
+      webkitConnection?: unknown;
+    }).connection ||
+    (navigator as unknown as { mozConnection?: unknown }).mozConnection ||
     (navigator as unknown as { webkitConnection?: unknown }).webkitConnection;
+  }
+
+  private initializeNetworkQuality() {
+    this.updateNetworkInfo();
+  }
+
+  private setupEventListeners() {
+    const connection = this.getConnection();
+    if (connection && typeof connection === 'object' && 'addEventListener' in connection) {
+      const conn = connection as { addEventListener: (event: string, handler: () => void) => void };
+      conn.addEventListener('change', () => this.updateNetworkInfo());
+    }
+  }
+
+  private updateNetworkInfo() {
+    const connection = this.getConnection();
 
     if (connection) {
-      const conn = connection as { 
-        addEventListener?: (event: string, handler: () => void) => void;
-        removeEventListener?: (event: string, handler: () => void) => void;
+      const conn = connection as {
+        effectiveType?: string;
+        downlink?: number;
+        rtt?: number;
+        saveData?: boolean;
       };
-      
-      if (conn.addEventListener) {
-        conn.addEventListener('change', updateNetworkInfo);
-        
-        return () => {
-          if (conn.removeEventListener) {
-            conn.removeEventListener('change', updateNetworkInfo);
-          }
-        };
-      }
+
+      const quality: NetworkQuality = {
+        effectiveType: (conn.effectiveType as '4g' | '3g' | '2g' | 'slow-2g') || 'unknown',
+        downlink: conn.downlink || 0,
+        rtt: conn.rtt || 0,
+        saveData: conn.saveData || false,
+        isSupported: true,
+      };
+
+      this.networkQuality = quality;
+      this.recommendedQuality = calculateRecommendedQuality(quality);
+    } else {
+      this.networkQuality = { ...this.networkQuality, isSupported: false };
     }
-  }, []);
+
+    // キャッシュを無効化
+    this.cachedSnapshot = null;
+    this.notifyListeners();
+  }
+
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  getSnapshot = () => {
+    if (!this.cachedSnapshot) {
+      this.cachedSnapshot = {
+        networkQuality: this.networkQuality,
+        recommendedQuality: this.recommendedQuality,
+      };
+    }
+    return this.cachedSnapshot;
+  };
+
+  getServerSnapshot = () => {
+    return {
+      networkQuality: {
+        effectiveType: 'unknown' as const,
+        downlink: 0,
+        rtt: 0,
+        saveData: false,
+        isSupported: false,
+      },
+      recommendedQuality: {
+        width: 1280,
+        height: 720,
+        frameRate: 30,
+        bitrate: 2500,
+      },
+    };
+  };
+
+  private notifyListeners = () => {
+    this.listeners.forEach(listener => listener());
+  };
+}
+
+const networkQualityStore = new NetworkQualityStore();
+
+export function useNetworkQuality() {
+  // Use external store for network quality synchronization
+  const { networkQuality, recommendedQuality } = useSyncExternalStore(
+    networkQualityStore.subscribe,
+    networkQualityStore.getSnapshot,
+    networkQualityStore.getServerSnapshot
+  );
 
   return { networkQuality, recommendedQuality };
 }
@@ -124,7 +168,7 @@ function calculateRecommendedQuality(network: NetworkQuality): VideoQualitySetti
         frameRate: 30,
         bitrate: 2500,
       };
-    
+
     case '3g':
       // 中速接続: 中品質
       return {
@@ -133,7 +177,7 @@ function calculateRecommendedQuality(network: NetworkQuality): VideoQualitySetti
         frameRate: 24,
         bitrate: 1200,
       };
-    
+
     case '2g':
     case 'slow-2g':
       // 低速接続: 低品質
@@ -143,7 +187,7 @@ function calculateRecommendedQuality(network: NetworkQuality): VideoQualitySetti
         frameRate: 15,
         bitrate: 500,
       };
-    
+
     default:
       // 不明な接続: 中品質（安全側）
       return {

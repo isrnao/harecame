@@ -1,18 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  Video, 
-  VideoOff, 
-  Users, 
-  Eye, 
-  Wifi, 
-  WifiOff, 
-  AlertCircle, 
+import {
+  Video,
+  VideoOff,
+  Users,
+  Eye,
+  Wifi,
+  WifiOff,
+  AlertCircle,
   CheckCircle,
   Monitor,
   Smartphone,
@@ -27,6 +27,8 @@ interface StreamManagementPanelProps {
   eventId: string;
   cameras: CameraConnectionClient[];
   streamStatus: StreamStatusClient | null;
+  activeCamera: CameraConnectionClient | null;
+  onActiveCameraChange: (camera: CameraConnectionClient | null) => void;
 }
 
 interface StreamSwitchEvent {
@@ -37,56 +39,62 @@ interface StreamSwitchEvent {
   reason: 'new_connection' | 'quality_improvement' | 'manual_switch' | 'disconnection';
 }
 
-export function StreamManagementPanel({ 
-  eventId: _eventId, 
-  cameras, 
-  streamStatus: _streamStatus
+export function StreamManagementPanel({
+  eventId: _eventId,
+  cameras,
+  streamStatus: _streamStatus,
+  activeCamera,
+  onActiveCameraChange
 }: StreamManagementPanelProps) {
   // eventId と streamStatus は将来の機能拡張のために保持
   // 現在は未使用だが、ストリーム状態の詳細管理で使用予定
   void _eventId; // 未使用パラメータを明示的に処理
   void _streamStatus; // 未使用パラメータを明示的に処理
-  const [activeCamera, setActiveCamera] = useState<CameraConnectionClient | null>(null);
+  void onActiveCameraChange; // 将来の手動カメラ切り替え機能用
+  // React 19: 状態の上位移動 - activeCamera状態は親から受け取る
   const [switchHistory, setSwitchHistory] = useState<StreamSwitchEvent[]>([]);
   const [isStandby, setIsStandby] = useState(false);
   const [lastSwitchTime, setLastSwitchTime] = useState<Date | null>(null);
 
+  // React 19: 計算結果のキャッシュ最適化 - useMemoで高価な計算をキャッシュ
+  const activeCameras = useMemo(() =>
+    cameras.filter(camera => camera.status === 'active'),
+    [cameras]
+  );
+
   // Find the currently active camera
   useEffect(() => {
-    const activeCameras = cameras.filter(camera => camera.status === 'active');
-    
     if (activeCameras.length === 0) {
-      setActiveCamera(null);
       setIsStandby(true);
     } else {
       // In a real implementation, this would be determined by the backend
       // For now, we'll use the most recently connected active camera
-      const mostRecent = activeCameras.reduce((latest, current) => {
-        return new Date(current.joinedAt) > new Date(latest.joinedAt) ? current : latest;
-      });
-      
-      setActiveCamera(prev => {
-        if (!prev || prev.id !== mostRecent.id) {
-          // Camera switch detected
-          if (prev) {
-            const switchEvent: StreamSwitchEvent = {
-              id: `switch-${Date.now()}`,
-              timestamp: new Date(),
-              fromCamera: prev.id,
-              toCamera: mostRecent.id,
-              reason: 'new_connection'
-            };
-            setSwitchHistory(prevHistory => [switchEvent, ...prevHistory.slice(0, 9)]); // Keep last 10 events
-          }
-          
-          setLastSwitchTime(new Date());
-          return mostRecent;
-        }
-        return prev;
-      });
+      // React 19: 状態の上位移動により、activeCamera状態は親で管理される
       setIsStandby(false);
     }
-  }, [cameras]); // activeCameraを依存関係から削除
+  }, [activeCameras.length]);
+
+  // React 19: 状態の上位移動 - activeCameraの変更を監視してスイッチ履歴を更新
+  const previousActiveCameraRef = useRef<CameraConnectionClient | null>(null);
+
+  useEffect(() => {
+    const previousCamera = previousActiveCameraRef.current;
+
+    if (activeCamera && previousCamera && activeCamera.id !== previousCamera.id) {
+      // Camera switch detected
+      const switchEvent: StreamSwitchEvent = {
+        id: `switch-${Date.now()}`,
+        timestamp: new Date(),
+        fromCamera: previousCamera.id,
+        toCamera: activeCamera.id,
+        reason: 'new_connection'
+      };
+      setSwitchHistory(prevHistory => [switchEvent, ...prevHistory.slice(0, 9)]); // Keep last 10 events
+      setLastSwitchTime(new Date());
+    }
+
+    previousActiveCameraRef.current = activeCamera;
+  }, [activeCamera]);
 
   const getDeviceIcon = (platform?: string) => {
     switch (platform?.toLowerCase()) {
@@ -122,9 +130,8 @@ export function StreamManagementPanel({
     }
   };
 
-  const activeCameras = cameras.filter(camera => camera.status === 'active');
-  const standbyMessage = activeCameras.length === 0 ? 
-    'カメラが接続されていません' : 
+  const standbyMessage = activeCameras.length === 0 ?
+    'カメラが接続されていません' :
     'ストリーム準備中...';
 
   return (
@@ -236,7 +243,7 @@ export function StreamManagementPanel({
           ) : (
             <div className="space-y-3">
               {activeCameras.map((camera) => (
-                <div 
+                <div
                   key={camera.id}
                   className={`flex items-center justify-between p-3 rounded-lg border ${
                     activeCamera?.id === camera.id ? 'bg-green-50 border-green-200' : 'bg-muted'
@@ -249,12 +256,12 @@ export function StreamManagementPanel({
                         {camera.participantName || camera.participantId}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {camera.streamQuality?.resolution || 'N/A'} • 
+                        {camera.streamQuality?.resolution || 'N/A'} •
                         {camera.streamQuality?.frameRate || 'N/A'} fps
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     {activeCamera?.id === camera.id ? (
                       <Badge className="bg-green-500">
@@ -289,10 +296,10 @@ export function StreamManagementPanel({
           <CardContent>
             <div className="space-y-3">
               {switchHistory.map((event) => {
-                const fromCamera = event.fromCamera ? 
+                const fromCamera = event.fromCamera ?
                   cameras.find(c => c.id === event.fromCamera) : null;
                 const toCamera = cameras.find(c => c.id === event.toCamera);
-                
+
                 return (
                   <div key={event.id} className="flex items-center gap-3 p-3 bg-muted rounded-lg">
                     <div className="flex-1">
@@ -346,7 +353,7 @@ export function StreamManagementPanel({
                 有効
               </Badge>
             </div>
-            
+
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="font-medium">品質優先切り替え</h4>
@@ -361,8 +368,8 @@ export function StreamManagementPanel({
             </div>
 
             <div className="pt-4 border-t">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 disabled
                 className="w-full"
               >

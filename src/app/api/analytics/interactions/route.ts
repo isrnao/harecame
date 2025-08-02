@@ -1,5 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 import type { ViewerInteraction } from '@/lib/analytics';
+
+// データベースにインタラクションを保存する関数
+async function saveInteractionToDatabase(interaction: ViewerInteraction) {
+  // 実際の実装では、Supabaseやその他のデータベースに保存
+  // 現在は開発用のログ出力
+  console.log('Saving interaction to database:', {
+    eventId: interaction.eventId,
+    action: interaction.action,
+    timestamp: interaction.timestamp,
+    metadata: interaction.metadata,
+  });
+
+  // シミュレートされたデータベース保存処理
+  await new Promise(resolve => setTimeout(resolve, 100));
+}
 
 // POST /api/analytics/interactions - 視聴者インタラクションを記録
 export async function POST(request: NextRequest) {
@@ -23,11 +39,15 @@ export async function POST(request: NextRequest) {
       metadata: interaction.metadata,
     });
 
-    // React 19の after() API使用想定箇所
-    // 実際の実装では、非ブロッキングでデータベースに保存
-    // after(() => {
-    //   saveToDatabase(interaction);
-    // });
+    // after() APIを使用して応答後にデータベース保存を実行
+    after(async () => {
+      try {
+        await saveInteractionToDatabase(interaction);
+        console.log('Analytics interaction saved to database:', interaction.eventId);
+      } catch (error) {
+        console.error('Failed to save interaction to database:', error);
+      }
+    });
 
     return NextResponse.json({
       success: true,
