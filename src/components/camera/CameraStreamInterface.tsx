@@ -8,8 +8,6 @@ import {
   startTransition,
 } from "react";
 
-// モジュールレベルでのメディア初期化状態管理（開発環境での二重実行防止）
-let isMediaInitializationInProgress = false;
 import {
   Room,
   RoomEvent,
@@ -104,6 +102,9 @@ export function CameraStreamInterface({
   const [isInitializingMedia, setIsInitializingMedia] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isDisconnected, setIsDisconnected] = useState(false);
+
+  // 初期化フラグを管理するRef（コンポーネントインスタンス固有）
+  const isMediaInitializationInProgress = useRef(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const localVideoTrack = useRef<LocalVideoTrack | null>(null);
@@ -647,12 +648,12 @@ export function CameraStreamInterface({
       if (
         isInitializingMedia ||
         isMediaInitialized ||
-        isMediaInitializationInProgress
+        isMediaInitializationInProgress.current
       ) {
         return;
       }
 
-      isMediaInitializationInProgress = true;
+      isMediaInitializationInProgress.current = true;
       setIsInitializingMedia(true);
 
       try {
@@ -670,7 +671,7 @@ export function CameraStreamInterface({
         if (isMounted) {
           setIsInitializingMedia(false);
         }
-        isMediaInitializationInProgress = false;
+        isMediaInitializationInProgress.current = false;
       }
     };
 
@@ -682,7 +683,7 @@ export function CameraStreamInterface({
       clearTimeout(timer);
       // 開発環境でのクリーンアップ時にフラグをリセット
       if (process.env.NODE_ENV === "development") {
-        isMediaInitializationInProgress = false;
+        isMediaInitializationInProgress.current = false;
       }
     };
   }, [initializeMedia, isInitializingMedia, isMediaInitialized]);

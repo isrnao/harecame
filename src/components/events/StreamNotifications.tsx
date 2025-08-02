@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
+import { useState, useEffect, useRef, useCallback, useDeferredValue } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -144,8 +144,8 @@ export function StreamNotifications({ cameras }: StreamNotificationsProps) {
     return () => clearTimeout(timer);
   }, [notifications]);
 
-  // React 19: 計算結果のキャッシュ最適化 - useMemoで高価な計算をキャッシュ
-  const dismissNotification = useMemo(() => (id: string) => {
+  // React 19: 関数のメモ化 - useCallbackで関数のメモ化
+  const dismissNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(notification => notification.id !== id));
   }, []);
 
