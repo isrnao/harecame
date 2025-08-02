@@ -337,9 +337,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
 
   return (
-    <AuthContext.Provider value={auth}>
+    <AuthContext value={auth}>
       {children}
-    </AuthContext.Provider>
+    </AuthContext>
   );
 }
 
