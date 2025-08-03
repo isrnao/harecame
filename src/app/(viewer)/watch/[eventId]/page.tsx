@@ -1,7 +1,13 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
+import { after } from 'next/server';
 import { StreamViewer } from '@/components/stream/StreamViewer';
 import { getEventById } from '@/app/actions/events';
+
+// Next.js 15: App Router専用の最適化設定
+export const dynamic = 'force-dynamic'; // 動的パラメータとリアルタイムストリームのため
+export const runtime = 'edge'; // 視聴者向けページはエッジランタイムで高速化
+export const revalidate = 60; // 1分間隔でイベント情報を再検証
 
 interface ViewerPageProps {
   params: Promise<{ eventId: string }>;
@@ -9,12 +15,28 @@ interface ViewerPageProps {
 
 export default async function ViewerPage({ params }: ViewerPageProps) {
   const { eventId } = await params;
-  
+
   const event = await getEventById(eventId);
-  
+
   if (!event) {
     notFound();
   }
+
+  // Next.js 15: after() APIを使用して視聴開始のアナリティクスを応答後に記録
+  after(async () => {
+    try {
+      console.log('Viewer page accessed:', {
+        eventId,
+        eventTitle: event.title,
+        timestamp: new Date().toISOString(),
+        hasStreamUrl: !!event.youtubeStreamUrl,
+      });
+      // 実際の実装では、アナリティクスサービスに送信
+      // await analyticsService.trackViewerAccess({ eventId, timestamp: new Date() });
+    } catch (error) {
+      console.error('Failed to record viewer analytics:', error);
+    }
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -28,7 +50,7 @@ export default async function ViewerPage({ params }: ViewerPageProps) {
               <p className="text-sm sm:text-base text-gray-600">{event.description}</p>
             )}
           </div>
-          
+
           <Suspense fallback={
             <div className="aspect-video bg-gray-200 rounded-lg flex items-center justify-center">
               <div className="text-center">
@@ -37,7 +59,7 @@ export default async function ViewerPage({ params }: ViewerPageProps) {
               </div>
             </div>
           }>
-            <StreamViewer 
+            <StreamViewer
               eventId={eventId}
               streamUrl={event.youtubeStreamUrl || ''}
               eventTitle={event.title}

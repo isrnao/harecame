@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import type { WindowWithOrientation } from '@/lib/type-guards';
 
 export interface DeviceOrientation {
   orientation: 'portrait' | 'landscape';
@@ -54,7 +55,8 @@ class DeviceOrientationStore {
       angle = screen.orientation.angle;
       orientationType = screen.orientation.type.includes('landscape') ? 'landscape' : 'portrait';
     } else if ('orientation' in window) {
-      angle = (window as unknown as { orientation: number }).orientation;
+      const windowWithOrientation = window as WindowWithOrientation;
+      angle = windowWithOrientation.orientation || 0;
       orientationType = Math.abs(angle) === 90 ? 'landscape' : 'portrait';
     } else {
       // Fallback: use window dimensions

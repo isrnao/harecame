@@ -1,6 +1,9 @@
 import { Metadata } from 'next';
 import { EventCreationForm } from '@/components/events/EventCreationForm';
 
+// Next.js 15: 静的ルート最適化のためのdynamic設定
+export const dynamic = 'force-static';
+
 export const metadata: Metadata = {
   title: 'イベント作成 - Harecame',
   description: '新しいライブ配信イベントを作成します',
@@ -17,7 +20,7 @@ export default function CreateEventPage() {
           ライブ配信イベントの基本情報を入力して、参加者が簡単に参加できるイベントを作成しましょう
         </p>
       </div>
-      
+
       <EventCreationForm />
     </div>
   );

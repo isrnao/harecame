@@ -1,6 +1,8 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import type { NavigatorWithConnection, NetworkConnectionWithEvents } from '@/lib/type-guards';
+import { hasEventListener, isNetworkConnectionWithEvents } from '@/lib/type-guards';
 
 export interface NetworkQuality {
   effectiveType: '4g' | '3g' | '2g' | 'slow-2g' | 'unknown';
@@ -43,13 +45,8 @@ class NetworkQualityStore {
   }
 
   private getConnection() {
-    return (navigator as unknown as {
-      connection?: unknown;
-      mozConnection?: unknown;
-      webkitConnection?: unknown;
-    }).connection ||
-    (navigator as unknown as { mozConnection?: unknown }).mozConnection ||
-    (navigator as unknown as { webkitConnection?: unknown }).webkitConnection;
+    const nav = navigator as NavigatorWithConnection;
+    return nav.connection || nav.mozConnection || nav.webkitConnection;
   }
 
   private initializeNetworkQuality() {
@@ -58,28 +55,20 @@ class NetworkQualityStore {
 
   private setupEventListeners() {
     const connection = this.getConnection();
-    if (connection && typeof connection === 'object' && 'addEventListener' in connection) {
-      const conn = connection as { addEventListener: (event: string, handler: () => void) => void };
-      conn.addEventListener('change', () => this.updateNetworkInfo());
+    if (connection && hasEventListener(connection)) {
+      connection.addEventListener('change', () => this.updateNetworkInfo());
     }
   }
 
   private updateNetworkInfo() {
     const connection = this.getConnection();
 
-    if (connection) {
-      const conn = connection as {
-        effectiveType?: string;
-        downlink?: number;
-        rtt?: number;
-        saveData?: boolean;
-      };
-
+    if (connection && isNetworkConnectionWithEvents(connection)) {
       const quality: NetworkQuality = {
-        effectiveType: (conn.effectiveType as '4g' | '3g' | '2g' | 'slow-2g') || 'unknown',
-        downlink: conn.downlink || 0,
-        rtt: conn.rtt || 0,
-        saveData: conn.saveData || false,
+        effectiveType: this.validateEffectiveType(connection.effectiveType),
+        downlink: connection.downlink || 0,
+        rtt: connection.rtt || 0,
+        saveData: connection.saveData || false,
         isSupported: true,
       };
 
@@ -92,6 +81,13 @@ class NetworkQualityStore {
     // キャッシュを無効化
     this.cachedSnapshot = null;
     this.notifyListeners();
+  }
+
+  private validateEffectiveType(effectiveType: string | undefined): '4g' | '3g' | '2g' | 'slow-2g' | 'unknown' {
+    if (!effectiveType) return 'unknown';
+
+    const validTypes = ['4g', '3g', '2g', 'slow-2g'] as const;
+    return validTypes.includes(effectiveType as any) ? effectiveType as '4g' | '3g' | '2g' | 'slow-2g' : 'unknown';
   }
 
   subscribe = (listener: () => void) => {

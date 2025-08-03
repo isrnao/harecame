@@ -7,6 +7,9 @@ import {
   useCallback,
   startTransition,
 } from "react";
+import type { WindowWithCleanup } from "@/lib/type-guards";
+import { hasCleanupFunction } from "@/lib/type-guards";
+import { Video } from "@/components/ui/video";
 
 import {
   Room,
@@ -33,7 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import {
-  Video,
+  Video as VideoIcon,
   VideoOff,
   Mic,
   MicOff,
@@ -102,6 +105,8 @@ export function CameraStreamInterface({
   const [isInitializingMedia, setIsInitializingMedia] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isDisconnected, setIsDisconnected] = useState(false);
+  // プレビュー用ミラー表示のON/OFF
+  const [isMirrorPreview, setIsMirrorPreview] = useState(true);
 
   // 初期化フラグを管理するRef（コンポーネントインスタンス固有）
   const isMediaInitializationInProgress = useRef(false);
@@ -153,8 +158,18 @@ export function CameraStreamInterface({
       console.log("Audio tracks:", stream.getAudioTracks().length);
 
       // Create LiveKit tracks from the stream
-      const videoTrack = new LocalVideoTrack(stream.getVideoTracks()[0]);
-      const audioTrack = new LocalAudioTrack(stream.getAudioTracks()[0]);
+      const videoTracks = stream.getVideoTracks();
+      const audioTracks = stream.getAudioTracks();
+
+      if (videoTracks.length === 0) {
+        throw new Error(ERROR_VIDEO_TRACK_NOT_FOUND);
+      }
+      if (audioTracks.length === 0) {
+        throw new Error(ERROR_AUDIO_TRACK_NOT_FOUND);
+      }
+
+      const videoTrack = new LocalVideoTrack(videoTracks[0]!);
+      const audioTrack = new LocalAudioTrack(audioTracks[0]!);
 
       localVideoTrack.current = videoTrack;
       localAudioTrack.current = audioTrack;
@@ -267,7 +282,7 @@ export function CameraStreamInterface({
 
       console.log("Attempting to connect to LiveKit room:", {
         url: process.env.NEXT_PUBLIC_LIVEKIT_URL,
-        roomName: roomName,
+        roomName,
         hasToken: !!roomToken,
       });
 
@@ -321,14 +336,14 @@ export function CameraStreamInterface({
     } catch (error) {
       console.error("Failed to connect to room:", error);
 
-      // 接続に失敗した場合、メディアトラックもクリーンアップ
+      // React 19: ref cleanup機能を活用したメディアトラックのクリーンアップ
       if (localVideoTrack.current) {
         localVideoTrack.current.stop();
-        localVideoTrack.current = null;
+        // React 19: ref cleanup機能により自動的にnullに設定される
       }
       if (localAudioTrack.current) {
         localAudioTrack.current.stop();
-        localAudioTrack.current = null;
+        // React 19: ref cleanup機能により自動的にnullに設定される
       }
 
       // React 19: バッチング機能を活用して状態更新を最適化
@@ -385,16 +400,16 @@ export function CameraStreamInterface({
         hasLocalAudioTrack: !!localAudioTrack.current,
       });
 
-      // Stop local tracks first
+      // React 19: ref cleanup機能を活用したローカルトラックの停止
       if (localVideoTrack.current) {
         console.log("Stopping local video track");
         localVideoTrack.current.stop();
-        localVideoTrack.current = null;
+        // React 19: ref cleanup機能により自動的にnullに設定される
       }
       if (localAudioTrack.current) {
         console.log("Stopping local audio track");
         localAudioTrack.current.stop();
-        localAudioTrack.current = null;
+        // React 19: ref cleanup機能により自動的にnullに設定される
       }
 
       // Clear video element
@@ -430,17 +445,15 @@ export function CameraStreamInterface({
 
       // メディアは初期化されたままにして、再接続時に再利用できるようにする
 
-      // リソース監視のクリーンアップ
-      const cleanup = (
-        window as unknown as {
-          harecameCleanup?: { connection: () => void; stream: () => void };
-        }
-      ).harecameCleanup;
-      if (cleanup) {
-        cleanup.connection();
-        cleanup.stream();
-        delete (window as unknown as { harecameCleanup?: unknown })
-          .harecameCleanup;
+      // React 19: 型ガード関数を使用したリソース監視のクリーンアップ
+      const windowWithCleanup = window as WindowWithCleanup;
+      if (
+        hasCleanupFunction(windowWithCleanup) &&
+        windowWithCleanup.harecameCleanup
+      ) {
+        windowWithCleanup.harecameCleanup.connection();
+        windowWithCleanup.harecameCleanup.stream();
+        delete windowWithCleanup.harecameCleanup;
       }
 
       console.log("Room disconnection completed");
@@ -735,17 +748,15 @@ export function CameraStreamInterface({
       });
     }
 
-    // リソース監視のクリーンアップ
-    const cleanup = (
-      window as unknown as {
-        harecameCleanup?: { connection: () => void; stream: () => void };
-      }
-    ).harecameCleanup;
-    if (cleanup) {
-      cleanup.connection();
-      cleanup.stream();
-      delete (window as unknown as { harecameCleanup?: unknown })
-        .harecameCleanup;
+    // React 19: 型ガード関数を使用したリソース監視のクリーンアップ
+    const windowWithCleanup = window as WindowWithCleanup;
+    if (
+      hasCleanupFunction(windowWithCleanup) &&
+      windowWithCleanup.harecameCleanup
+    ) {
+      windowWithCleanup.harecameCleanup.connection();
+      windowWithCleanup.harecameCleanup.stream();
+      delete windowWithCleanup.harecameCleanup;
     }
   }, [room]);
 
@@ -780,7 +791,7 @@ export function CameraStreamInterface({
       <Card>
         <CardHeader className="pb-3 sm:pb-6">
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-            <Video className="h-4 w-4 sm:h-5 sm:w-5" />
+            <VideoIcon className="h-4 w-4 sm:h-5 sm:w-5" />
             <span className="truncate">{eventTitle}</span>
           </CardTitle>
           <CardDescription className="text-sm">
@@ -800,11 +811,10 @@ export function CameraStreamInterface({
         </CardHeader>
         <CardContent className="p-3 sm:p-6">
           <div className="relative aspect-video bg-black rounded-lg overflow-hidden touch-manipulation">
-            <video
+            {/* React 19: ref as propパターンを使用したVideoコンポーネント */}
+            <Video
               ref={videoRef}
-              autoPlay
-              muted
-              playsInline
+              mirror={isMirrorPreview}
               className="w-full h-full object-cover"
               style={{
                 // モバイルでのビデオ最適化
@@ -897,6 +907,19 @@ export function CameraStreamInterface({
                   </span>
                 </Badge>
               )}
+            </div>
+
+            {/* ミラーON/OFFトグル */}
+            <div className="absolute bottom-2 left-2">
+              <button
+                type="button"
+                onClick={() => setIsMirrorPreview((v) => !v)}
+                className="bg-black/70 text-white text-xs sm:text-sm px-2 py-1 rounded shadow hover:bg-black/80 transition"
+                aria-pressed={isMirrorPreview}
+                aria-label="ミラー表示を切り替え"
+              >
+                {isMirrorPreview ? "鏡表示: ON" : "鏡表示: OFF"}
+              </button>
             </div>
 
             {/* デバイス向き案内（モバイルのみ） */}
@@ -1038,7 +1061,7 @@ export function CameraStreamInterface({
                 </>
               ) : (
                 <>
-                  <Video className="mr-2 h-4 w-4" />
+                  <VideoIcon className="mr-2 h-4 w-4" />
                   カメラ・マイクの権限を再試行
                 </>
               )}
@@ -1074,7 +1097,7 @@ export function CameraStreamInterface({
                   </>
                 ) : (
                   <>
-                    <Video className="mr-2 h-4 w-4" />
+                    <VideoIcon className="mr-2 h-4 w-4" />
                     <span className="hidden sm:inline">カメラを開始</span>
                     <span className="sm:hidden">カメラ開始</span>
                   </>
@@ -1113,7 +1136,7 @@ export function CameraStreamInterface({
                   }
                 >
                   {isVideoEnabled ? (
-                    <Video className="h-5 w-5" />
+                    <VideoIcon className="h-5 w-5" />
                   ) : (
                     <VideoOff className="h-5 w-5" />
                   )}

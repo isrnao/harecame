@@ -4,6 +4,10 @@ import { CameraJoinForm } from '@/components/camera/CameraJoinForm';
 import { Card, CardContent } from '@/components/ui/card';
 import { Camera, Loader2 } from 'lucide-react';
 
+// Next.js 15: App Router専用の最適化設定
+export const dynamic = 'force-dynamic'; // searchParamsを使用するため動的
+export const runtime = 'nodejs'; // Node.jsランタイムで安定動作
+
 export const metadata: Metadata = {
   title: 'カメラで参加 - Harecame',
   description: 'ライブ配信にカメラオペレーターとして参加します',
@@ -25,9 +29,9 @@ function CameraJoinContent({ participationCode }: { participationCode?: string }
           ライブ配信にカメラオペレーターとして参加しましょう
         </p>
       </div>
-      
+
       <CameraJoinForm initialParticipationCode={participationCode} />
-      
+
       <div className="mt-8 text-center">
         <Card className="max-w-md mx-auto">
           <CardContent className="pt-6">

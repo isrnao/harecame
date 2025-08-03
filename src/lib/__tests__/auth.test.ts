@@ -5,6 +5,8 @@ jest.mock('../database', () => ({
   },
 }));
 
+import type { MockAuthService, TestEnvironment, JWTPayload } from '@/lib/type-guards';
+
 // Mock jose library
 jest.mock('jose', () => ({
   SignJWT: jest.fn().mockImplementation(() => ({
@@ -42,7 +44,7 @@ describe('JWT Security Validation', () => {
 
       it('should throw error when JWT_SECRET is not set in production', () => {
         delete process.env.JWT_SECRET;
-        
+
         expect(() => {
           jest.isolateModules(() => {
             require('../auth');
@@ -52,7 +54,7 @@ describe('JWT Security Validation', () => {
 
       it('should throw error when JWT_SECRET uses default value in production', () => {
         process.env.JWT_SECRET = 'your-secret-key-change-in-production';
-        
+
         expect(() => {
           jest.isolateModules(() => {
             require('../auth');
@@ -62,7 +64,7 @@ describe('JWT Security Validation', () => {
 
       it('should work correctly with proper JWT_SECRET in production', () => {
         process.env.JWT_SECRET = 'secure-production-secret-key-with-sufficient-length';
-        
+
         expect(() => {
           jest.isolateModules(() => {
             require('../auth');
@@ -72,7 +74,7 @@ describe('JWT Security Validation', () => {
 
       it('should throw specific error message for missing JWT_SECRET in production', () => {
         delete process.env.JWT_SECRET;
-        
+
         expect(() => {
           jest.isolateModules(() => {
             require('../auth');
@@ -82,7 +84,7 @@ describe('JWT Security Validation', () => {
 
       it('should throw specific error message for default JWT_SECRET in production', () => {
         process.env.JWT_SECRET = 'your-secret-key-change-in-production';
-        
+
         expect(() => {
           jest.isolateModules(() => {
             require('../auth');
@@ -99,75 +101,75 @@ describe('JWT Security Validation', () => {
       it('should warn when JWT_SECRET is not set in development', () => {
         delete process.env.JWT_SECRET;
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-        
+
         jest.isolateModules(() => {
           require('../auth');
         });
-        
+
         expect(consoleSpy).toHaveBeenCalledWith(
           expect.stringContaining('JWT_SECRET environment variable is not set')
         );
         expect(consoleSpy).toHaveBeenCalledWith(
           expect.stringContaining('Please set JWT_SECRET in your .env.local file')
         );
-        
+
         consoleSpy.mockRestore();
       });
 
       it('should warn when JWT_SECRET uses default value in development', () => {
         process.env.JWT_SECRET = 'your-secret-key-change-in-production';
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-        
+
         jest.isolateModules(() => {
           require('../auth');
         });
-        
+
         expect(consoleSpy).toHaveBeenCalledWith(
           expect.stringContaining('JWT_SECRET is using the default value')
         );
         expect(consoleSpy).toHaveBeenCalledWith(
           expect.stringContaining('Consider setting a unique secret')
         );
-        
+
         consoleSpy.mockRestore();
       });
 
       it('should work without warnings with proper JWT_SECRET in development', () => {
         process.env.JWT_SECRET = 'development-secret-key';
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-        
+
         jest.isolateModules(() => {
           require('../auth');
         });
-        
+
         expect(consoleSpy).not.toHaveBeenCalled();
-        
+
         consoleSpy.mockRestore();
       });
 
       it('should return default secret when JWT_SECRET is not set in development', () => {
         delete process.env.JWT_SECRET;
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-        
+
         let result: string;
         jest.isolateModules(() => {
           const { JWTSecurityValidator } = require('../auth');
           result = JWTSecurityValidator.validateJWTSecret();
         });
-        
+
         expect(result!).toBe('your-secret-key-change-in-production');
         consoleSpy.mockRestore();
       });
 
       it('should return provided secret when JWT_SECRET is set in development', () => {
         process.env.JWT_SECRET = 'custom-development-secret';
-        
+
         let result: string;
         jest.isolateModules(() => {
           const { JWTSecurityValidator } = require('../auth');
           result = JWTSecurityValidator.validateJWTSecret();
         });
-        
+
         expect(result!).toBe('custom-development-secret');
       });
     });
@@ -180,24 +182,24 @@ describe('JWT Security Validation', () => {
       it('should work without warnings in test environment', () => {
         delete process.env.JWT_SECRET;
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-        
+
         jest.isolateModules(() => {
           require('../auth');
         });
-        
+
         expect(consoleSpy).not.toHaveBeenCalled();
         consoleSpy.mockRestore();
       });
 
       it('should use default secret in test environment', () => {
         delete process.env.JWT_SECRET;
-        
+
         let result: string;
         jest.isolateModules(() => {
           const { JWTSecurityValidator } = require('../auth');
           result = JWTSecurityValidator.validateJWTSecret();
         });
-        
+
         expect(result!).toBe('your-secret-key-change-in-production');
       });
     });
@@ -207,11 +209,11 @@ describe('JWT Security Validation', () => {
         delete (process.env as any).NODE_ENV;
         delete process.env.JWT_SECRET;
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-        
+
         jest.isolateModules(() => {
           require('../auth');
         });
-        
+
         expect(consoleSpy).toHaveBeenCalledWith(
           expect.stringContaining('JWT_SECRET environment variable is not set')
         );
@@ -221,7 +223,7 @@ describe('JWT Security Validation', () => {
       it('should handle empty JWT_SECRET as undefined', () => {
         (process.env as any).NODE_ENV = 'production';
         process.env.JWT_SECRET = '';
-        
+
         expect(() => {
           jest.isolateModules(() => {
             require('../auth');
@@ -232,7 +234,7 @@ describe('JWT Security Validation', () => {
       it('should handle whitespace-only JWT_SECRET as undefined', () => {
         (process.env as any).NODE_ENV = 'production';
         process.env.JWT_SECRET = '   ';
-        
+
         expect(() => {
           jest.isolateModules(() => {
             require('../auth');
@@ -243,7 +245,7 @@ describe('JWT Security Validation', () => {
       it('should handle null JWT_SECRET in production', () => {
         (process.env as any).NODE_ENV = 'production';
         process.env.JWT_SECRET = null as any;
-        
+
         expect(() => {
           jest.isolateModules(() => {
             require('../auth');
@@ -254,7 +256,7 @@ describe('JWT Security Validation', () => {
       it('should handle very short JWT_SECRET in production', () => {
         (process.env as any).NODE_ENV = 'production';
         process.env.JWT_SECRET = 'abc';
-        
+
         // 短いシークレットでも設定されていれば通す（長さの検証は別途実装可能）
         expect(() => {
           jest.isolateModules(() => {
@@ -266,7 +268,7 @@ describe('JWT Security Validation', () => {
       it('should handle special characters in JWT_SECRET', () => {
         (process.env as any).NODE_ENV = 'production';
         process.env.JWT_SECRET = 'secret!@#$%^&*()_+-=[]{}|;:,.<>?';
-        
+
         expect(() => {
           jest.isolateModules(() => {
             require('../auth');
@@ -277,7 +279,7 @@ describe('JWT Security Validation', () => {
       it('should handle unicode characters in JWT_SECRET', () => {
         (process.env as any).NODE_ENV = 'production';
         process.env.JWT_SECRET = 'シークレット鍵🔐';
-        
+
         expect(() => {
           jest.isolateModules(() => {
             require('../auth');
@@ -290,26 +292,26 @@ describe('JWT Security Validation', () => {
         (process.env as any).NODE_ENV = 'development';
         delete process.env.JWT_SECRET;
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-        
+
         let result1: string;
         jest.isolateModules(() => {
           const { JWTSecurityValidator } = require('../auth');
           result1 = JWTSecurityValidator.validateJWTSecret();
         });
-        
+
         expect(result1!).toBe('your-secret-key-change-in-production');
         expect(consoleSpy).toHaveBeenCalled();
-        
+
         // 本番環境に変更
         (process.env as any).NODE_ENV = 'production';
         process.env.JWT_SECRET = 'production-secret';
-        
+
         let result2: string;
         jest.isolateModules(() => {
           const { JWTSecurityValidator } = require('../auth');
           result2 = JWTSecurityValidator.validateJWTSecret();
         });
-        
+
         expect(result2!).toBe('production-secret');
         consoleSpy.mockRestore();
       });
@@ -320,13 +322,13 @@ describe('JWT Security Validation', () => {
     it('should return encoded secret as Uint8Array', () => {
       (process.env as any).NODE_ENV = 'development';
       process.env.JWT_SECRET = 'test-secret-key';
-      
+
       let result: Uint8Array;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         result = JWTSecurityValidator.getEncodedSecret();
       });
-      
+
       expect(result!.constructor.name).toBe('Uint8Array');
       expect(new TextDecoder().decode(result!)).toBe('test-secret-key');
     });
@@ -335,13 +337,13 @@ describe('JWT Security Validation', () => {
       (process.env as any).NODE_ENV = 'development';
       delete process.env.JWT_SECRET;
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-      
+
       let result: Uint8Array;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         result = JWTSecurityValidator.getEncodedSecret();
       });
-      
+
       expect(new TextDecoder().decode(result!)).toBe('your-secret-key-change-in-production');
       consoleSpy.mockRestore();
     });
@@ -349,7 +351,7 @@ describe('JWT Security Validation', () => {
     it('should throw error when called in production without JWT_SECRET', () => {
       (process.env as any).NODE_ENV = 'production';
       delete process.env.JWT_SECRET;
-      
+
       expect(() => {
         jest.isolateModules(() => {
           const { JWTSecurityValidator } = require('../auth');
@@ -362,13 +364,13 @@ describe('JWT Security Validation', () => {
       (process.env as any).NODE_ENV = 'development';
       const longSecret = 'a'.repeat(1000);
       process.env.JWT_SECRET = longSecret;
-      
+
       let result: Uint8Array;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         result = JWTSecurityValidator.getEncodedSecret();
       });
-      
+
       expect(new TextDecoder().decode(result!)).toBe(longSecret);
       expect(result!.length).toBe(1000);
     });
@@ -378,7 +380,7 @@ describe('JWT Security Validation', () => {
     it('should validate security configuration on module load', () => {
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = 'secure-production-key';
-      
+
       expect(() => {
         jest.isolateModules(() => {
           require('../auth');
@@ -389,7 +391,7 @@ describe('JWT Security Validation', () => {
     it('should fail fast on security misconfiguration', () => {
       (process.env as any).NODE_ENV = 'production';
       delete process.env.JWT_SECRET;
-      
+
       const startTime = Date.now();
       expect(() => {
         jest.isolateModules(() => {
@@ -397,7 +399,7 @@ describe('JWT Security Validation', () => {
         });
       }).toThrow();
       const endTime = Date.now();
-      
+
       // セキュリティエラーは即座に発生すべき（100ms以内）
       expect(endTime - startTime).toBeLessThan(100);
     });
@@ -405,7 +407,7 @@ describe('JWT Security Validation', () => {
     it('should provide clear error messages for security issues', () => {
       (process.env as any).NODE_ENV = 'production';
       delete process.env.JWT_SECRET;
-      
+
       try {
         jest.isolateModules(() => {
           require('../auth');
@@ -421,8 +423,8 @@ describe('JWT Security Validation', () => {
     it('should handle concurrent security validations', async () => {
       (process.env as any).NODE_ENV = 'development';
       process.env.JWT_SECRET = 'concurrent-test-secret';
-      
-      const validations = Array.from({ length: 10 }, () => 
+
+      const validations = Array.from({ length: 10 }, () =>
         new Promise((resolve) => {
           jest.isolateModules(() => {
             const { JWTSecurityValidator } = require('../auth');
@@ -430,7 +432,7 @@ describe('JWT Security Validation', () => {
           });
         })
       );
-      
+
       const results = await Promise.all(validations);
       results.forEach(result => {
         expect(result).toBe('concurrent-test-secret');
@@ -442,13 +444,13 @@ describe('JWT Security Validation', () => {
     it('should treat non-production environments as development', () => {
       (process.env as any).NODE_ENV = 'staging';
       delete process.env.JWT_SECRET;
-      
+
       let result: string;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         result = JWTSecurityValidator.validateJWTSecret();
       });
-      
+
       // staging環境は開発環境として扱われる（production以外はすべて開発環境）
       expect(result!).toBe('your-secret-key-change-in-production');
     });
@@ -456,13 +458,13 @@ describe('JWT Security Validation', () => {
     it('should handle case-sensitive environment names', () => {
       (process.env as any).NODE_ENV = 'PRODUCTION';
       delete process.env.JWT_SECRET;
-      
+
       let result: string;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         result = JWTSecurityValidator.validateJWTSecret();
       });
-      
+
       // 大文字のPRODUCTIONは本番環境として認識されない（厳密に'production'のみ）
       expect(result!).toBe('your-secret-key-change-in-production');
     });
@@ -471,13 +473,13 @@ describe('JWT Security Validation', () => {
       (process.env as any).NODE_ENV = 'test';
       process.env.CI = 'true';
       delete process.env.JWT_SECRET;
-      
+
       let result: string;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         result = JWTSecurityValidator.validateJWTSecret();
       });
-      
+
       expect(result!).toBe('your-secret-key-change-in-production');
     });
   });
@@ -495,7 +497,7 @@ describe('JWT Security Validation', () => {
 
         strongSecrets.forEach(secret => {
           process.env.JWT_SECRET = secret;
-          
+
           expect(() => {
             jest.isolateModules(() => {
               require('../auth');
@@ -514,7 +516,7 @@ describe('JWT Security Validation', () => {
 
         encodedSecrets.forEach(secret => {
           process.env.JWT_SECRET = secret;
-          
+
           expect(() => {
             jest.isolateModules(() => {
               require('../auth');
@@ -528,7 +530,7 @@ describe('JWT Security Validation', () => {
       it('should provide actionable error messages for production misconfiguration', () => {
         (process.env as any).NODE_ENV = 'production';
         delete process.env.JWT_SECRET;
-        
+
         try {
           jest.isolateModules(() => {
             require('../auth');
@@ -544,7 +546,7 @@ describe('JWT Security Validation', () => {
       it('should provide specific guidance for default secret usage in production', () => {
         (process.env as any).NODE_ENV = 'production';
         process.env.JWT_SECRET = 'your-secret-key-change-in-production';
-        
+
         try {
           jest.isolateModules(() => {
             require('../auth');
@@ -559,18 +561,18 @@ describe('JWT Security Validation', () => {
       it('should handle process.env modifications during runtime', () => {
         (process.env as any).NODE_ENV = 'development';
         process.env.JWT_SECRET = 'initial-secret';
-        
-        let validator: any;
+
+        let validator: unknown;
         jest.isolateModules(() => {
           const { JWTSecurityValidator } = require('../auth');
           validator = JWTSecurityValidator;
         });
-        
+
         // 実行時に環境変数を変更
         process.env.JWT_SECRET = 'modified-secret';
-        
+
         // 新しい検証では変更された値が使用される
-        const result = validator.validateJWTSecret();
+        const result = (validator as any).validateJWTSecret();
         expect(result).toBe('modified-secret');
       });
     });
@@ -579,55 +581,55 @@ describe('JWT Security Validation', () => {
       it('should log appropriate warnings for development environment issues', () => {
         (process.env as any).NODE_ENV = 'development';
         delete process.env.JWT_SECRET;
-        
+
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-        
+
         jest.isolateModules(() => {
           require('../auth');
         });
-        
+
         expect(consoleSpy).toHaveBeenCalledTimes(1);
         expect(consoleSpy).toHaveBeenCalledWith(
           expect.stringMatching(/⚠️.*JWT_SECRET.*not set.*development.*\.env\.local/)
         );
-        
+
         consoleSpy.mockRestore();
       });
 
       it('should log warnings for default secret usage in development', () => {
         (process.env as any).NODE_ENV = 'development';
         process.env.JWT_SECRET = 'your-secret-key-change-in-production';
-        
+
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-        
+
         jest.isolateModules(() => {
           require('../auth');
         });
-        
+
         expect(consoleSpy).toHaveBeenCalledTimes(1);
         expect(consoleSpy).toHaveBeenCalledWith(
           expect.stringMatching(/⚠️.*JWT_SECRET.*default value.*unique secret/)
         );
-        
+
         consoleSpy.mockRestore();
       });
 
       it('should not log warnings for properly configured development environment', () => {
         (process.env as any).NODE_ENV = 'development';
         process.env.JWT_SECRET = 'proper-development-secret-key';
-        
+
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
         const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
         const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-        
+
         jest.isolateModules(() => {
           require('../auth');
         });
-        
+
         expect(consoleSpy).not.toHaveBeenCalled();
         expect(consoleErrorSpy).not.toHaveBeenCalled();
         expect(consoleLogSpy).not.toHaveBeenCalled();
-        
+
         consoleSpy.mockRestore();
         consoleErrorSpy.mockRestore();
         consoleLogSpy.mockRestore();
@@ -638,11 +640,11 @@ describe('JWT Security Validation', () => {
       it('should handle rapid environment switches', () => {
         const environments = ['development', 'test', 'production', 'staging'];
         const secrets = ['dev-secret', 'test-secret', 'prod-secret', 'staging-secret'];
-        
+
         environments.forEach((env, index) => {
           (process.env as any).NODE_ENV = env;
           process.env.JWT_SECRET = secrets[index];
-          
+
           if (env === 'production') {
             expect(() => {
               jest.isolateModules(() => {
@@ -663,9 +665,9 @@ describe('JWT Security Validation', () => {
       it('should handle memory pressure during validation', async () => {
         (process.env as any).NODE_ENV = 'development';
         process.env.JWT_SECRET = 'memory-test-secret';
-        
+
         // 大量の同時検証を実行してメモリ使用量をテスト
-        const validations = Array.from({ length: 1000 }, () => 
+        const validations = Array.from({ length: 1000 }, () =>
           new Promise<string>((resolve) => {
             jest.isolateModules(() => {
               const { JWTSecurityValidator } = require('../auth');
@@ -673,14 +675,14 @@ describe('JWT Security Validation', () => {
             });
           })
         );
-        
+
         const results = await Promise.all(validations);
-        
+
         // すべての結果が一致することを確認
         results.forEach(result => {
           expect(result).toBe('memory-test-secret');
         });
-        
+
         // メモリリークがないことを確認（基本的なチェック）
         expect(results.length).toBe(1000);
       });
@@ -688,17 +690,17 @@ describe('JWT Security Validation', () => {
       it('should validate security configuration consistency', () => {
         (process.env as any).NODE_ENV = 'production';
         process.env.JWT_SECRET = 'consistent-production-secret';
-        
+
         // 複数回の検証で一貫した結果が得られることを確認
         const results: string[] = [];
-        
+
         for (let i = 0; i < 10; i++) {
           jest.isolateModules(() => {
             const { JWTSecurityValidator } = require('../auth');
             results.push(JWTSecurityValidator.validateJWTSecret());
           });
         }
-        
+
         // すべての結果が同じであることを確認
         const uniqueResults = [...new Set(results)];
         expect(uniqueResults).toHaveLength(1);
@@ -708,12 +710,12 @@ describe('JWT Security Validation', () => {
       it('should handle process termination scenarios', () => {
         (process.env as any).NODE_ENV = 'production';
         delete process.env.JWT_SECRET;
-        
+
         // プロセス終了シナリオをシミュレート
         const originalExit = process.exit;
         const mockExit = jest.fn();
         process.exit = mockExit as any;
-        
+
         try {
           jest.isolateModules(() => {
             require('../auth');
@@ -731,25 +733,25 @@ describe('JWT Security Validation', () => {
 
     describe('Security Integration Tests', () => {
       it('should integrate security validation with token generation', () => {
-        (process.env as any).NODE_ENV = 'production';
+        (process.env as TestEnvironment).NODE_ENV = 'production';
         process.env.JWT_SECRET = 'integration-test-secret-key';
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
-        
+
         // セキュリティ検証が通った後、トークン生成が正常に動作することを確認
         expect(async () => {
-          await authService.generateAdminToken('admin-123', 'event-456');
+          await authService!.generateAdminToken('admin-123', 'event-456');
         }).not.toThrow();
       });
 
       it('should prevent token generation with invalid security configuration', () => {
         (process.env as any).NODE_ENV = 'production';
         delete process.env.JWT_SECRET;
-        
+
         expect(() => {
           jest.isolateModules(() => {
             require('../auth');
@@ -760,13 +762,13 @@ describe('JWT Security Validation', () => {
       it('should validate encoded secret format for JWT operations', () => {
         (process.env as any).NODE_ENV = 'development';
         process.env.JWT_SECRET = 'encoded-secret-test';
-        
+
         let encodedSecret: Uint8Array;
         jest.isolateModules(() => {
           const { JWTSecurityValidator } = require('../auth');
           encodedSecret = JWTSecurityValidator.getEncodedSecret();
         });
-        
+
         // エンコードされたシークレットが適切な形式であることを確認
         expect(encodedSecret!.constructor.name).toBe('Uint8Array');
         expect(encodedSecret!.length).toBeGreaterThan(0);
@@ -782,7 +784,7 @@ describe('AuthService', () => {
     // Set up environment for tests
     (process.env as any).NODE_ENV = 'test';
     process.env.JWT_SECRET = 'test-secret-key';
-    
+
     // Reset jose mocks
     const { jwtVerify } = require('jose');
     jwtVerify.mockReset();
@@ -984,16 +986,16 @@ describe('AuthService', () => {
       it('should generate mock LiveKit token with warning in development', async () => {
         (process.env as any).NODE_ENV = 'development';
         process.env.JWT_SECRET = 'test-secret-key';
-        
+
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
-        const token = await authService.generateLiveKitToken(
+        const token = await authService!.generateLiveKitToken(
           'participant-123',
           'event-456',
           'Test User'
@@ -1009,23 +1011,23 @@ describe('AuthService', () => {
         expect(consoleSpy).toHaveBeenCalledWith(
           expect.stringContaining('For actual LiveKit integration, implement proper token generation using @livekit/server-sdk')
         );
-        
+
         consoleSpy.mockRestore();
       });
 
       it('should generate mock LiveKit token with critical error in production', async () => {
         (process.env as any).NODE_ENV = 'production';
         process.env.JWT_SECRET = 'production-secret-key';
-        
+
         const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
-        const token = await authService.generateLiveKitToken(
+        const token = await authService!.generateLiveKitToken(
           'participant-123',
           'event-456',
           'Test User'
@@ -1041,19 +1043,19 @@ describe('AuthService', () => {
         expect(consoleErrorSpy).toHaveBeenCalledWith(
           expect.stringContaining('Please implement proper LiveKit token generation using @livekit/server-sdk before deploying to production')
         );
-        
+
         consoleErrorSpy.mockRestore();
       });
 
       it('should generate token with correct mock payload structure', async () => {
         (process.env as any).NODE_ENV = 'test';
         process.env.JWT_SECRET = 'test-secret-key';
-        
+
         // SignJWTのモックを詳細に設定してペイロードを確認
         const mockSign = jest.fn().mockResolvedValue('mock-livekit-token');
         const mockSetProtectedHeader = jest.fn().mockReturnThis();
         const { SignJWT } = require('jose');
-        SignJWT.mockImplementation((payload: any) => {
+        SignJWT.mockImplementation((payload: JWTPayload) => {
           // ペイロードの構造を検証
           expect(payload).toMatchObject({
             sub: 'participant-123',
@@ -1069,20 +1071,20 @@ describe('AuthService', () => {
           });
           expect(payload.iat).toBeGreaterThan(0);
           expect(payload.exp).toBeGreaterThan(payload.iat);
-          
+
           return {
             setProtectedHeader: mockSetProtectedHeader,
             sign: mockSign,
           };
         });
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
-        const token = await authService.generateLiveKitToken(
+        const token = await authService!.generateLiveKitToken(
           'participant-123',
           'event-456',
           'Test User'
@@ -1096,25 +1098,25 @@ describe('AuthService', () => {
       it('should handle missing participant name gracefully', async () => {
         (process.env as any).NODE_ENV = 'test';
         process.env.JWT_SECRET = 'test-secret-key';
-        
+
         const mockSign = jest.fn().mockResolvedValue('mock-livekit-token');
         const mockSetProtectedHeader = jest.fn().mockReturnThis();
         const { SignJWT } = require('jose');
-        SignJWT.mockImplementation((payload: any) => {
+        SignJWT.mockImplementation((payload: JWTPayload) => {
           expect(payload.name).toBe('participant-789'); // participantIdがnameとして使用される
           return {
             setProtectedHeader: mockSetProtectedHeader,
             sign: mockSign,
           };
         });
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
-        const token = await authService.generateLiveKitToken(
+        const token = await authService!.generateLiveKitToken(
           'participant-789',
           'event-456'
           // participantNameを省略
@@ -1126,25 +1128,25 @@ describe('AuthService', () => {
       it('should generate room name with event prefix', async () => {
         (process.env as any).NODE_ENV = 'test';
         process.env.JWT_SECRET = 'test-secret-key';
-        
+
         const mockSign = jest.fn().mockResolvedValue('mock-livekit-token');
         const mockSetProtectedHeader = jest.fn().mockReturnThis();
         const { SignJWT } = require('jose');
-        SignJWT.mockImplementation((payload: any) => {
+        SignJWT.mockImplementation((payload: JWTPayload) => {
           expect(payload.room).toBe('event-special-event-123');
           return {
             setProtectedHeader: mockSetProtectedHeader,
             sign: mockSign,
           };
         });
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
-        await authService.generateLiveKitToken(
+        await authService!.generateLiveKitToken(
           'participant-123',
           'special-event-123',
           'Test User'
@@ -1154,32 +1156,32 @@ describe('AuthService', () => {
       it('should set appropriate token expiration time', async () => {
         (process.env as any).NODE_ENV = 'test';
         process.env.JWT_SECRET = 'test-secret-key';
-        
+
         const beforeTime = Math.floor(Date.now() / 1000);
-        
+
         const mockSign = jest.fn().mockResolvedValue('mock-livekit-token');
         const mockSetProtectedHeader = jest.fn().mockReturnThis();
         const { SignJWT } = require('jose');
-        SignJWT.mockImplementation((payload: any) => {
+        SignJWT.mockImplementation((payload: JWTPayload) => {
           const afterTime = Math.floor(Date.now() / 1000);
-          
+
           expect(payload.iat).toBeGreaterThanOrEqual(beforeTime);
           expect(payload.iat).toBeLessThanOrEqual(afterTime);
           expect(payload.exp).toBe(payload.iat + (2 * 60 * 60)); // 2時間後
-          
+
           return {
             setProtectedHeader: mockSetProtectedHeader,
             sign: mockSign,
           };
         });
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
-        await authService.generateLiveKitToken(
+        await authService!.generateLiveKitToken(
           'participant-123',
           'event-456',
           'Test User'
@@ -1189,28 +1191,28 @@ describe('AuthService', () => {
       it('should include mock implementation warning in token payload', async () => {
         (process.env as any).NODE_ENV = 'test';
         process.env.JWT_SECRET = 'test-secret-key';
-        
+
         const mockSign = jest.fn().mockResolvedValue('mock-livekit-token');
         const mockSetProtectedHeader = jest.fn().mockReturnThis();
         const { SignJWT } = require('jose');
-        SignJWT.mockImplementation((payload: any) => {
+        SignJWT.mockImplementation((payload: JWTPayload) => {
           expect(payload.mockImplementation).toBe(true);
           expect(payload.warning).toContain('mock implementation');
           expect(payload.warning).toContain('will not work with LiveKit servers');
-          
+
           return {
             setProtectedHeader: mockSetProtectedHeader,
             sign: mockSign,
           };
         });
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
-        await authService.generateLiveKitToken(
+        await authService!.generateLiveKitToken(
           'participant-123',
           'event-456',
           'Test User'
@@ -1220,7 +1222,7 @@ describe('AuthService', () => {
       it('should handle token generation errors gracefully', async () => {
         (process.env as any).NODE_ENV = 'test';
         process.env.JWT_SECRET = 'test-secret-key';
-        
+
         const mockSign = jest.fn().mockRejectedValue(new Error('Token generation failed'));
         const mockSetProtectedHeader = jest.fn().mockReturnThis();
         const { SignJWT } = require('jose');
@@ -1228,14 +1230,14 @@ describe('AuthService', () => {
           setProtectedHeader: mockSetProtectedHeader,
           sign: mockSign,
         }));
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
-        await expect(authService.generateLiveKitToken(
+        await expect(authService!.generateLiveKitToken(
           'participant-123',
           'event-456',
           'Test User'
@@ -1247,16 +1249,16 @@ describe('AuthService', () => {
       it('should indicate mock implementation status through console warnings', async () => {
         (process.env as any).NODE_ENV = 'development';
         process.env.JWT_SECRET = 'test-secret-key';
-        
+
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
-        await authService.generateLiveKitToken('test', 'event', 'user');
+        await authService!.generateLiveKitToken('test', 'event', 'user');
 
         // 実装状況の確認機能をテスト
         expect(consoleSpy).toHaveBeenCalledWith(
@@ -1265,23 +1267,23 @@ describe('AuthService', () => {
         expect(consoleSpy).toHaveBeenCalledWith(
           expect.stringContaining('@livekit/server-sdk')
         );
-        
+
         consoleSpy.mockRestore();
       });
 
       it('should provide clear guidance for production implementation', async () => {
         (process.env as any).NODE_ENV = 'production';
         process.env.JWT_SECRET = 'production-secret-key';
-        
+
         const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
-        await authService.generateLiveKitToken('test', 'event', 'user');
+        await authService!.generateLiveKitToken('test', 'event', 'user');
 
         expect(consoleErrorSpy).toHaveBeenCalledWith(
           expect.stringContaining('implement proper LiveKit token generation')
@@ -1292,27 +1294,27 @@ describe('AuthService', () => {
         expect(consoleErrorSpy).toHaveBeenCalledWith(
           expect.stringContaining('before deploying to production')
         );
-        
+
         consoleErrorSpy.mockRestore();
       });
 
       it('should differentiate warning levels between environments', async () => {
         const environments = ['development', 'test', 'production'];
-        
+
         for (const env of environments) {
           (process.env as any).NODE_ENV = env;
           process.env.JWT_SECRET = `${env}-secret-key`;
-          
+
           const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
           const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-          
-          let authService: any;
+
+          let authService: MockAuthService | undefined;
           jest.isolateModules(() => {
             const auth = require('../auth');
             authService = auth.AuthService;
           });
 
-          await authService.generateLiveKitToken('test', 'event', 'user');
+          await authService!.generateLiveKitToken('test', 'event', 'user');
 
           if (env === 'production') {
             expect(consoleErrorSpy).toHaveBeenCalled();
@@ -1321,7 +1323,7 @@ describe('AuthService', () => {
             expect(consoleWarnSpy).toHaveBeenCalled();
             expect(consoleErrorSpy).not.toHaveBeenCalled();
           }
-          
+
           consoleWarnSpy.mockRestore();
           consoleErrorSpy.mockRestore();
         }
@@ -1332,22 +1334,22 @@ describe('AuthService', () => {
       it('should integrate with existing authentication flow', async () => {
         (process.env as any).NODE_ENV = 'test';
         process.env.JWT_SECRET = 'test-secret-key';
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
         // 通常のカメラトークン生成
-        const cameraToken = await authService.generateCameraToken(
+        const cameraToken = await authService!.generateCameraToken(
           'participant-123',
           'event-456',
           'Test User'
         );
-        
+
         // LiveKitトークン生成
-        const liveKitToken = await authService.generateLiveKitToken(
+        const liveKitToken = await authService!.generateLiveKitToken(
           'participant-123',
           'event-456',
           'Test User'
@@ -1360,15 +1362,15 @@ describe('AuthService', () => {
       it('should handle concurrent LiveKit token generation', async () => {
         (process.env as any).NODE_ENV = 'test';
         process.env.JWT_SECRET = 'test-secret-key';
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
         const tokenPromises = Array.from({ length: 5 }, (_, i) =>
-          authService.generateLiveKitToken(
+          authService!.generateLiveKitToken(
             `participant-${i}`,
             'event-456',
             `User ${i}`
@@ -1376,7 +1378,7 @@ describe('AuthService', () => {
         );
 
         const tokens = await Promise.all(tokenPromises);
-        
+
         tokens.forEach(token => {
           expect(token).toBe('mock-jwt-token');
         });
@@ -1385,23 +1387,23 @@ describe('AuthService', () => {
       it('should maintain consistent behavior across multiple calls', async () => {
         (process.env as any).NODE_ENV = 'development';
         process.env.JWT_SECRET = 'test-secret-key';
-        
+
         const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-        
-        let authService: any;
+
+        let authService: MockAuthService | undefined;
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
 
         // 複数回呼び出し
-        await authService.generateLiveKitToken('user1', 'event1', 'User 1');
-        await authService.generateLiveKitToken('user2', 'event2', 'User 2');
-        await authService.generateLiveKitToken('user3', 'event3', 'User 3');
+        await authService!.generateLiveKitToken('user1', 'event1', 'User 1');
+        await authService!.generateLiveKitToken('user2', 'event2', 'User 2');
+        await authService!.generateLiveKitToken('user3', 'event3', 'User 3');
 
         // 各呼び出しで警告が出力されることを確認
         expect(consoleSpy).toHaveBeenCalledTimes(3);
-        
+
         consoleSpy.mockRestore();
       });
     });
@@ -1502,7 +1504,7 @@ describe('Security Configuration Requirements Validation', () => {
     it('should throw error and stop system when JWT_SECRET is not set in production', () => {
       (process.env as any).NODE_ENV = 'production';
       delete process.env.JWT_SECRET;
-      
+
       expect(() => {
         jest.isolateModules(() => {
           require('../auth');
@@ -1513,7 +1515,7 @@ describe('Security Configuration Requirements Validation', () => {
     it('should throw error when JWT_SECRET is empty string in production', () => {
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = '';
-      
+
       expect(() => {
         jest.isolateModules(() => {
           require('../auth');
@@ -1524,7 +1526,7 @@ describe('Security Configuration Requirements Validation', () => {
     it('should throw error when JWT_SECRET is only whitespace in production', () => {
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = '   \t\n   ';
-      
+
       expect(() => {
         jest.isolateModules(() => {
           require('../auth');
@@ -1535,7 +1537,7 @@ describe('Security Configuration Requirements Validation', () => {
     it('should throw error when JWT_SECRET uses default value in production', () => {
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = 'your-secret-key-change-in-production';
-      
+
       expect(() => {
         jest.isolateModules(() => {
           require('../auth');
@@ -1546,15 +1548,15 @@ describe('Security Configuration Requirements Validation', () => {
     it('should validate that system stops immediately on production security failure', () => {
       (process.env as any).NODE_ENV = 'production';
       delete process.env.JWT_SECRET;
-      
+
       const startTime = Date.now();
-      
+
       expect(() => {
         jest.isolateModules(() => {
           require('../auth');
         });
       }).toThrow();
-      
+
       const endTime = Date.now();
       // システムは即座に停止すべき（50ms以内）
       expect(endTime - startTime).toBeLessThan(50);
@@ -1565,7 +1567,7 @@ describe('Security Configuration Requirements Validation', () => {
     it('should start normally when JWT_SECRET is properly set in production', () => {
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = 'secure-production-jwt-secret-key-2024';
-      
+
       expect(() => {
         jest.isolateModules(() => {
           require('../auth');
@@ -1576,7 +1578,7 @@ describe('Security Configuration Requirements Validation', () => {
     it('should start normally with complex JWT_SECRET in production', () => {
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = 'Complex!JWT@Secret#2024$With%Special^Characters&And*Numbers123';
-      
+
       expect(() => {
         jest.isolateModules(() => {
           require('../auth');
@@ -1587,7 +1589,7 @@ describe('Security Configuration Requirements Validation', () => {
     it('should start normally with long JWT_SECRET in production', () => {
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = 'a'.repeat(256); // 256文字の長いシークレット
-      
+
       expect(() => {
         jest.isolateModules(() => {
           require('../auth');
@@ -1598,13 +1600,13 @@ describe('Security Configuration Requirements Validation', () => {
     it('should validate JWT_SECRET is properly encoded for JWT operations', () => {
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = 'production-encoding-test-secret';
-      
+
       let encodedSecret: Uint8Array;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         encodedSecret = JWTSecurityValidator.getEncodedSecret();
       });
-      
+
       expect(encodedSecret!.constructor.name).toBe('Uint8Array');
       expect(new TextDecoder().decode(encodedSecret!)).toBe('production-encoding-test-secret');
     });
@@ -1614,15 +1616,15 @@ describe('Security Configuration Requirements Validation', () => {
     it('should allow default value usage in development with warning', () => {
       (process.env as any).NODE_ENV = 'development';
       delete process.env.JWT_SECRET;
-      
+
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-      
+
       let result: string;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         result = JWTSecurityValidator.validateJWTSecret();
       });
-      
+
       expect(result!).toBe('your-secret-key-change-in-production');
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('⚠️  JWT_SECRET environment variable is not set. Using default value for development.')
@@ -1630,22 +1632,22 @@ describe('Security Configuration Requirements Validation', () => {
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('Please set JWT_SECRET in your .env.local file for better security.')
       );
-      
+
       consoleSpy.mockRestore();
     });
 
     it('should warn when explicitly using default value in development', () => {
       (process.env as any).NODE_ENV = 'development';
       process.env.JWT_SECRET = 'your-secret-key-change-in-production';
-      
+
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-      
+
       let result: string;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         result = JWTSecurityValidator.validateJWTSecret();
       });
-      
+
       expect(result!).toBe('your-secret-key-change-in-production');
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('⚠️  JWT_SECRET is using the default value.')
@@ -1653,61 +1655,61 @@ describe('Security Configuration Requirements Validation', () => {
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('Consider setting a unique secret in your .env.local file.')
       );
-      
+
       consoleSpy.mockRestore();
     });
 
     it('should not warn when proper JWT_SECRET is set in development', () => {
       (process.env as any).NODE_ENV = 'development';
       process.env.JWT_SECRET = 'custom-development-secret-key';
-      
+
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-      
+
       let result: string;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         result = JWTSecurityValidator.validateJWTSecret();
       });
-      
+
       expect(result!).toBe('custom-development-secret-key');
       expect(consoleSpy).not.toHaveBeenCalled();
-      
+
       consoleSpy.mockRestore();
     });
 
     it('should treat undefined NODE_ENV as development environment', () => {
       delete (process.env as any).NODE_ENV;
       delete process.env.JWT_SECRET;
-      
+
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-      
+
       let result: string;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         result = JWTSecurityValidator.validateJWTSecret();
       });
-      
+
       expect(result!).toBe('your-secret-key-change-in-production');
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('JWT_SECRET environment variable is not set')
       );
-      
+
       consoleSpy.mockRestore();
     });
 
     it('should treat non-production environments as development', () => {
       const nonProductionEnvs = ['development', 'test', 'staging', 'local', 'dev'];
-      
+
       nonProductionEnvs.forEach(env => {
         (process.env as any).NODE_ENV = env;
         delete process.env.JWT_SECRET;
-        
+
         let result: string;
         jest.isolateModules(() => {
           const { JWTSecurityValidator } = require('../auth');
           result = JWTSecurityValidator.validateJWTSecret();
         });
-        
+
         expect(result!).toBe('your-secret-key-change-in-production');
       });
     });
@@ -1717,7 +1719,7 @@ describe('Security Configuration Requirements Validation', () => {
     it('should handle process.env.JWT_SECRET being null', () => {
       (process.env as any).NODE_ENV = 'production';
       (process.env as any).JWT_SECRET = null;
-      
+
       expect(() => {
         jest.isolateModules(() => {
           require('../auth');
@@ -1728,7 +1730,7 @@ describe('Security Configuration Requirements Validation', () => {
     it('should handle process.env.JWT_SECRET being undefined', () => {
       (process.env as any).NODE_ENV = 'production';
       (process.env as any).JWT_SECRET = undefined;
-      
+
       expect(() => {
         jest.isolateModules(() => {
           require('../auth');
@@ -1739,20 +1741,20 @@ describe('Security Configuration Requirements Validation', () => {
     it('should handle JWT_SECRET with leading/trailing whitespace', () => {
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = '  production-secret-with-whitespace  ';
-      
+
       let result: string;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         result = JWTSecurityValidator.validateJWTSecret();
       });
-      
+
       expect(result!).toBe('production-secret-with-whitespace');
     });
 
     it('should provide detailed error context for debugging', () => {
       (process.env as any).NODE_ENV = 'production';
       delete process.env.JWT_SECRET;
-      
+
       try {
         jest.isolateModules(() => {
           require('../auth');
@@ -1770,28 +1772,28 @@ describe('Security Configuration Requirements Validation', () => {
       // 開発環境から開始
       (process.env as any).NODE_ENV = 'development';
       process.env.JWT_SECRET = 'dev-secret';
-      
+
       let devResult: string;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         devResult = JWTSecurityValidator.validateJWTSecret();
       });
       expect(devResult!).toBe('dev-secret');
-      
+
       // 本番環境に変更
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = 'prod-secret';
-      
+
       let prodResult: string;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         prodResult = JWTSecurityValidator.validateJWTSecret();
       });
       expect(prodResult!).toBe('prod-secret');
-      
+
       // 本番環境でシークレットを削除
       delete process.env.JWT_SECRET;
-      
+
       expect(() => {
         jest.isolateModules(() => {
           require('../auth');
@@ -1802,9 +1804,9 @@ describe('Security Configuration Requirements Validation', () => {
     it('should maintain security validation consistency across multiple calls', () => {
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = 'consistent-production-secret';
-      
+
       const results: string[] = [];
-      
+
       // 複数回の検証を実行
       for (let i = 0; i < 5; i++) {
         jest.isolateModules(() => {
@@ -1812,7 +1814,7 @@ describe('Security Configuration Requirements Validation', () => {
           results.push(JWTSecurityValidator.validateJWTSecret());
         });
       }
-      
+
       // すべての結果が一致することを確認
       const uniqueResults = [...new Set(results)];
       expect(uniqueResults).toHaveLength(1);
@@ -1824,24 +1826,24 @@ describe('Security Configuration Requirements Validation', () => {
     it('should ensure security validation occurs before any authentication operations', () => {
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = 'integration-test-secret';
-      
+
       // セキュリティ検証が成功した場合のみ、認証システムが利用可能になる
-      let authService: any;
+      let authService: MockAuthService | undefined;
       expect(() => {
         jest.isolateModules(() => {
           const auth = require('../auth');
           authService = auth.AuthService;
         });
       }).not.toThrow();
-      
+
       expect(authService).toBeDefined();
-      expect(typeof authService.generateAdminToken).toBe('function');
+      expect(typeof authService!.generateAdminToken).toBe('function');
     });
 
     it('should prevent authentication system initialization with invalid security config', () => {
       (process.env as any).NODE_ENV = 'production';
       delete process.env.JWT_SECRET;
-      
+
       // セキュリティ検証が失敗した場合、認証システムは初期化されない
       expect(() => {
         jest.isolateModules(() => {
@@ -1853,17 +1855,17 @@ describe('Security Configuration Requirements Validation', () => {
     it('should validate that encoded secret is ready for JWT operations', () => {
       (process.env as any).NODE_ENV = 'production';
       process.env.JWT_SECRET = 'jwt-operations-test-secret';
-      
+
       let encodedSecret: Uint8Array;
       jest.isolateModules(() => {
         const { JWTSecurityValidator } = require('../auth');
         encodedSecret = JWTSecurityValidator.getEncodedSecret();
       });
-      
+
       // エンコードされたシークレットがJWT操作に適した形式であることを確認
       expect(encodedSecret!.constructor.name).toBe('Uint8Array');
       expect(encodedSecret!.length).toBeGreaterThan(0);
-      
+
       // デコードして元の値と一致することを確認
       const decodedSecret = new TextDecoder().decode(encodedSecret!);
       expect(decodedSecret).toBe('jwt-operations-test-secret');

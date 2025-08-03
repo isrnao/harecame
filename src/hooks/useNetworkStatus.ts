@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
+import type { NavigatorWithConnection } from '@/lib/type-guards';
 
 export interface NetworkStatus {
   isOnline: boolean;
@@ -61,13 +62,8 @@ class NetworkStatusStore {
   }
 
   private getConnection() {
-    return (navigator as unknown as {
-      connection?: unknown;
-      mozConnection?: unknown;
-      webkitConnection?: unknown;
-    }).connection ||
-    (navigator as unknown as { mozConnection?: unknown }).mozConnection ||
-    (navigator as unknown as { webkitConnection?: unknown }).webkitConnection;
+    const nav = navigator as NavigatorWithConnection;
+    return nav.connection || nav.mozConnection || nav.webkitConnection;
   }
 
   private updateNetworkStatus() {

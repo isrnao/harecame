@@ -2,7 +2,8 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+// React 19: ComponentPropsWithRefを使用してref as propパターンを明示的に実装
+function Input({ className, type, ...props }: React.ComponentPropsWithRef<"input">) {
   return (
     <input
       type={type}

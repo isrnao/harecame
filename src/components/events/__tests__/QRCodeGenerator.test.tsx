@@ -9,17 +9,29 @@ jest.mock('qrcode', () => ({
 
 // モック関数への参照を取得
 import QRCode from 'qrcode';
-const mockToDataURL = QRCode.toDataURL as jest.MockedFunction<typeof QRCode.toDataURL>;
+import { createMockLocation, createMockQRCodeToDataURL, type MockWindow } from '@/lib/type-guards';
+
+const mockToDataURL = createMockQRCodeToDataURL();
+(QRCode.toDataURL as any) = mockToDataURL;
 
 // window.location をモック
-delete (window as any).location;
-(window as any).location = {
-  origin: 'http://localhost:3000',
-};
+const mockWindow = window as MockWindow;
+delete mockWindow.location;
+mockWindow.location = createMockLocation();
 
 // Next.js Image コンポーネントをモック
+interface MockImageProps {
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+  className?: string;
+  priority?: boolean;
+  [key: string]: unknown;
+}
+
 jest.mock('next/image', () => {
-  return function MockImage(props: any) {
+  return function MockImage(props: MockImageProps) {
     // Next.js Image の重要な属性を保持
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -30,7 +42,7 @@ jest.mock('next/image', () => {
         // unoptimized が明示的に true でない限り、最適化が有効
         data-optimized={props.unoptimized !== true ? 'true' : 'false'}
         // priority属性を文字列として設定
-        priority={props.priority ? 'true' : undefined}
+        data-priority={props.priority ? 'true' : undefined}
         // className属性を適切に設定
         className={props.className}
       />
@@ -53,7 +65,7 @@ describe('QRCodeGenerator', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // デフォルトのモック実装を設定
-    (mockToDataURL as jest.Mock).mockResolvedValue('data:image/png;base64,mock-qr-code-data');
+    mockToDataURL.mockResolvedValue('data:image/png;base64,mock-qr-code-data');
   });
 
   describe('画像最適化のテスト', () => {
@@ -258,7 +270,7 @@ describe('QRCodeGenerator', () => {
 
     test('エラー状態が適切に処理されることをテスト', async () => {
       // QRコード生成でエラーを発生させるモック
-      (mockToDataURL as jest.Mock).mockRejectedValueOnce(new Error('QR code generation failed'));
+      mockToDataURL.mockRejectedValueOnce(new Error('QR code generation failed'));
 
       // console.error をモック
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});

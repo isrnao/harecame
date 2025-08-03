@@ -18,10 +18,10 @@ const createMockRequest = (options: {
   method?: string;
   url?: string;
   headers?: Record<string, string>;
-  body?: any;
+  body?: unknown;
 } = {}) => {
   const headers = new Map(Object.entries(options.headers || {}));
-  
+
   return {
     method: options.method || 'GET',
     url: options.url || 'http://localhost:3000/api/test',
@@ -56,7 +56,7 @@ describe('Security Middleware', () => {
       // Test that rate limit configuration is properly set up
       const config = { windowMs: 60000, maxRequests: 1 };
       const rateLimitMiddleware = rateLimit(config);
-      
+
       expect(rateLimitMiddleware).toBeDefined();
       expect(typeof rateLimitMiddleware).toBe('function');
     });
@@ -248,7 +248,7 @@ describe('Access Control Scenarios', () => {
 describe('Security Best Practices', () => {
   it('should use secure token expiration times', () => {
     // Admin tokens: 24 hours
-    // Organizer tokens: 12 hours  
+    // Organizer tokens: 12 hours
     // Camera tokens: 8 hours
     // Viewer tokens: 4 hours
     expect(true).toBe(true); // These are configured in AuthService

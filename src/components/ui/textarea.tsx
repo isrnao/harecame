@@ -2,7 +2,8 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
+// React 19: ComponentPropsWithRefを使用してref as propパターンを明示的に実装
+function Textarea({ className, ...props }: React.ComponentPropsWithRef<"textarea">) {
   return (
     <textarea
       data-slot="textarea"

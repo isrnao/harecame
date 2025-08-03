@@ -6,13 +6,13 @@ import { rateLimit, RATE_LIMITS, withErrorHandling, requestLogger } from '@/lib/
 // POST /api/events/validate-code - Validate participation code and generate camera token
 export const POST = withErrorHandling(async (request: NextRequest) => {
   requestLogger(request);
-  
+
   // Apply rate limiting
   const rateLimitResult = await rateLimit(RATE_LIMITS.joinEvent)(request);
   if (rateLimitResult) return rateLimitResult;
 
   const body = await request.json();
-  
+
   // Validate request body
   const validation = participationCodeSchema.safeParse(body);
   if (!validation.success) {
@@ -27,7 +27,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   }
 
   const { code: participationCode } = validation.data;
-  
+
   // Generate participant ID (could be from request or generated)
   const participantId = body.participantId || `participant-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const participantName = body.participantName;
@@ -75,7 +75,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       },
       tokens: {
         accessToken: token,
-        liveKitToken: liveKitToken,
+        liveKitToken,
       },
     },
   });

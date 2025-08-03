@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
           { headers: securityHeaders() }
         );
 
-      default:
+      default: {
         // Return full OpenAPI specification
         const documentation = generateAPIDocumentation();
 
@@ -76,6 +76,7 @@ info:
           },
           { headers: securityHeaders() }
         );
+      }
     }
   } catch (error) {
     console.error('Failed to generate API documentation:', error);

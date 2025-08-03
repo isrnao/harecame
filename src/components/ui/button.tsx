@@ -35,13 +35,14 @@ const buttonVariants = cva(
   }
 )
 
+// React 19: ComponentPropsWithRefを使用してref as propパターンを明示的に実装
 function Button({
   className,
   variant,
   size,
   asChild = false,
   ...props
-}: React.ComponentProps<"button"> &
+}: React.ComponentPropsWithRef<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
   }) {
