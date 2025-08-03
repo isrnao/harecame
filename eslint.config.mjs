@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
+import reactCompiler from "eslint-plugin-react-compiler";
 import { fixupPluginRules } from "@eslint/compat";
 import nextPlugin from "@next/eslint-plugin-next";
 import parser from "@typescript-eslint/parser";
@@ -24,6 +25,7 @@ export default [
     plugins: {
       react,
       "react-hooks": fixupPluginRules(reactHooks),
+      "react-compiler": reactCompiler,
       "@typescript-eslint": tsPlugin,
       "@next/next": nextPlugin,
     },
@@ -39,6 +41,9 @@ export default [
       ...reactHooks.configs.recommended.rules,
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
+
+      // React Compiler ルール（React 19）
+      "react-compiler/react-compiler": "error",
 
       // React 基本ルール（2025年基準）
       "react/react-in-jsx-scope": "off", // React 17+では不要
