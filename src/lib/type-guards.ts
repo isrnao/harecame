@@ -121,7 +121,7 @@ export interface SelectableElement extends HTMLElement {
 }
 
 export function isSelectableElement(element: HTMLElement): element is SelectableElement {
-  return 'select' in element && typeof (element as any).select === 'function';
+  return 'select' in element && typeof (element as { select?: unknown }).select === 'function';
 }
 
 export function isInputElement(element: HTMLElement): element is HTMLInputElement {
