@@ -170,7 +170,7 @@ export function isNetworkConnectionWithEvents(value: unknown): value is NetworkC
 }
 
 export function hasEventListener(connection: unknown): connection is { addEventListener: (event: string, handler: () => void) => void } {
-  return isObject(connection) && 'addEventListener' in connection && typeof (connection as any).addEventListener === 'function';
+  return isObject(connection) && 'addEventListener' in connection && typeof (connection as { addEventListener?: unknown }).addEventListener === 'function';
 }
 
 // テスト用のモック型定義
