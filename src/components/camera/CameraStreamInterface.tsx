@@ -162,10 +162,10 @@ export function CameraStreamInterface({
       const audioTracks = stream.getAudioTracks();
 
       if (videoTracks.length === 0) {
-        throw new Error("ビデオトラックが見つかりません");
+        throw new Error(ERROR_VIDEO_TRACK_NOT_FOUND);
       }
       if (audioTracks.length === 0) {
-        throw new Error("オーディオトラックが見つかりません");
+        throw new Error(ERROR_AUDIO_TRACK_NOT_FOUND);
       }
 
       const videoTrack = new LocalVideoTrack(videoTracks[0]!);
