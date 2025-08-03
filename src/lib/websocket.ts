@@ -240,10 +240,7 @@ export class WebSocketEventHandler {
               new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime()
           )[0];
 
-          if (!newActiveCamera) {
-            console.error("No active camera found despite length check");
-            return;
-          }
+          
 
           const switchEvent: StreamSwitchedEvent = {
             type: "stream-switched",
