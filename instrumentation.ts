@@ -31,9 +31,11 @@ export async function onRequestError(
     stack: err.stack,
     name: err.name,
     digest: (err as any).digest, // Next.jsのエラーダイジェスト
-    url: request.url,
-    method: request.method,
-    userAgent: request.headers.get('user-agent'),
+    url: request?.url || 'unknown',
+    method: request?.method || 'unknown',
+    userAgent: request?.headers && typeof request.headers.get === 'function' 
+      ? request.headers.get('user-agent') 
+      : 'unknown',
     timestamp: new Date().toISOString(),
     routerKind: context.routerKind,
     routePath: context.routePath,
@@ -56,7 +58,11 @@ export async function onRequestError(
     console.group('🔍 Error Debug Information');
     console.log('Error Type:', err.constructor.name);
     console.log('Route Context:', context);
-    console.log('Request Headers:', Object.fromEntries(request.headers.entries()));
+    if (request?.headers && typeof request.headers.entries === 'function') {
+      console.log('Request Headers:', Object.fromEntries(request.headers.entries()));
+    } else {
+      console.log('Request Headers: unavailable');
+    }
     console.groupEnd();
   }
 }

@@ -1,9 +1,12 @@
-'use client';
-
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Video, Users, Eye } from 'lucide-react';
+import { EventIdInput } from '@/components/ui/event-id-input';
+
+// Next.js 15: App Router専用の最適化設定
+export const dynamic = 'force-static'; // ホームページは静的コンテンツ
+export const revalidate = 3600; // 1時間間隔で再生成
 
 export default function Home() {
   return (
@@ -39,25 +42,7 @@ export default function Home() {
                 <div className="text-sm text-gray-500">
                   イベントIDをお持ちの場合：
                 </div>
-                <div className="flex space-x-2">
-                  <input 
-                    type="text" 
-                    placeholder="イベントID" 
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
-                    id="eventIdInput"
-                  />
-                  <Button 
-                    size="sm"
-                    onClick={() => {
-                      const input = document.getElementById('eventIdInput') as HTMLInputElement;
-                      if (input.value) {
-                        window.location.href = `/watch/${input.value}`;
-                      }
-                    }}
-                  >
-                    視聴
-                  </Button>
-                </div>
+                <EventIdInput />
               </div>
             </CardContent>
           </Card>

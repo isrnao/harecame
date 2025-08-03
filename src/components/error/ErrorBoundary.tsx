@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Component, ErrorInfo, ReactNode } from "react";
+import { isErrorInfo } from '@/lib/type-guards';
 import {
   Card,
   CardContent,
@@ -70,8 +71,8 @@ export class ErrorBoundary extends Component<Props, State> {
         message: error.message,
         stack: error.stack,
         componentStack: errorInfo.componentStack,
-        errorBoundary: (errorInfo as unknown as { errorBoundary?: { constructor: { name: string } } }).errorBoundary?.constructor.name,
-        errorBoundaryStack: (errorInfo as unknown as { errorBoundaryStack?: string }).errorBoundaryStack,
+        errorBoundary: isErrorInfo(errorInfo) ? errorInfo.errorBoundary?.constructor.name : undefined,
+        errorBoundaryStack: isErrorInfo(errorInfo) ? errorInfo.errorBoundaryStack : undefined,
         timestamp: new Date().toISOString(),
         userAgent: navigator.userAgent,
         url: window.location.href,

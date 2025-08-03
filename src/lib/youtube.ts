@@ -6,7 +6,7 @@ export interface YouTubeLiveStream {
   description: string;
   streamUrl: string;
   streamKey: string;
-  status: 'created' | 'live' | 'complete';
+  status: "created" | "live" | "complete";
   scheduledStartTime?: string;
   viewerCount?: number;
   chatId?: string;
@@ -16,7 +16,7 @@ export interface CreateLiveStreamOptions {
   title: string;
   description?: string;
   scheduledStartTime?: Date;
-  privacy: 'public' | 'unlisted' | 'private';
+  privacy: "public" | "unlisted" | "private";
 }
 
 export interface YouTubeStreamStats {
@@ -31,10 +31,16 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const YOUTUBE_CLIENT_ID = process.env.YOUTUBE_CLIENT_ID;
 const YOUTUBE_CLIENT_SECRET = process.env.YOUTUBE_CLIENT_SECRET;
 
-const hasYouTubeConfig = !!(YOUTUBE_API_KEY && YOUTUBE_CLIENT_ID && YOUTUBE_CLIENT_SECRET);
+const hasYouTubeConfig = !!(
+  YOUTUBE_API_KEY &&
+  YOUTUBE_CLIENT_ID &&
+  YOUTUBE_CLIENT_SECRET
+);
 
 if (!hasYouTubeConfig) {
-  console.warn('YouTube API credentials not fully configured - using mock mode');
+  console.warn(
+    "YouTube API credentials not fully configured - using mock mode"
+  );
 }
 
 // Create a new YouTube Live stream
@@ -46,10 +52,10 @@ export async function createYouTubeLiveStream(
     const mockStream: YouTubeLiveStream = {
       id: `mock_${Date.now()}`,
       title: options.title,
-      description: options.description || '',
+      description: options.description || "",
       streamUrl: `https://www.youtube.com/watch?v=mock_${Date.now()}`,
       streamKey: `mock_stream_key_${Date.now()}`,
-      status: 'created',
+      status: "created",
       scheduledStartTime: options.scheduledStartTime?.toISOString(),
       viewerCount: 0,
       chatId: `mock_chat_${Date.now()}`,
@@ -62,14 +68,14 @@ export async function createYouTubeLiveStream(
   // 1. Creating a live broadcast
   // 2. Creating a live stream
   // 3. Binding the stream to the broadcast
-  
+
   const mockStream: YouTubeLiveStream = {
     id: `stream_${Date.now()}`,
     title: options.title,
-    description: options.description || '',
+    description: options.description || "",
     streamUrl: `https://www.youtube.com/watch?v=stream_${Date.now()}`,
     streamKey: `stream_key_${Date.now()}`,
-    status: 'created',
+    status: "created",
     scheduledStartTime: options.scheduledStartTime?.toISOString(),
     viewerCount: 0,
   };
@@ -101,7 +107,6 @@ export async function stopYouTubeLiveStream(streamId: string): Promise<void> {
 
 // Get YouTube Live stream status and stats
 export async function getYouTubeStreamStats(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _videoId: string
 ): Promise<YouTubeStreamStats> {
   if (!hasYouTubeConfig) {
@@ -109,7 +114,7 @@ export async function getYouTubeStreamStats(
     return {
       viewerCount: Math.floor(Math.random() * 100) + 10,
       isLive: Math.random() > 0.5,
-      duration: '00:15:30',
+      duration: "00:15:30",
       chatMessageCount: Math.floor(Math.random() * 50),
     };
   }
@@ -119,16 +124,16 @@ export async function getYouTubeStreamStats(
     // const response = await fetch(
     //   `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails,statistics&id=${videoId}&key=${YOUTUBE_API_KEY}`
     // );
-    
+
     // Mock implementation for now
     return {
       viewerCount: Math.floor(Math.random() * 100) + 10,
       isLive: true,
-      duration: '00:15:30',
+      duration: "00:15:30",
       chatMessageCount: Math.floor(Math.random() * 50),
     };
   } catch (error) {
-    console.error('Failed to get YouTube stream stats:', error);
+    console.error("Failed to get YouTube stream stats:", error);
     return {
       viewerCount: 0,
       isLive: false,
@@ -138,15 +143,14 @@ export async function getYouTubeStreamStats(
 
 // Get YouTube Live stream status
 export async function getYouTubeLiveStreamStatus(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _streamId: string
-): Promise<YouTubeLiveStream['status']> {
+): Promise<YouTubeLiveStream["status"]> {
   if (!hasYouTubeConfig) {
-    return Math.random() > 0.5 ? 'live' : 'created';
+    return Math.random() > 0.5 ? "live" : "created";
   }
 
   // TODO: Implement real YouTube API call
-  return 'created';
+  return "created";
 }
 
 // Generate YouTube embed URL
@@ -161,7 +165,8 @@ export function getYouTubeWatchUrl(videoId: string): string {
 
 // Extract video ID from YouTube URL
 export function extractVideoIdFromUrl(url: string): string | null {
-  const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/;
+  const regex =
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/;
   const match = url.match(regex);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }

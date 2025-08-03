@@ -9,19 +9,19 @@ const PROTECTED_ROUTES = {
     '/api/events/[eventId]', // PUT, DELETE
     '/api/auth/admin',
   ],
-  
+
   // Organizer routes - require organizer or admin authentication
   organizer: [
     '/api/events/[eventId]/status', // PUT
     '/api/events/[eventId]/cameras', // GET
   ],
-  
+
   // Camera routes - require camera token authentication
   camera: [
     '/api/events/[eventId]/join', // POST
     '/api/events/[eventId]/cameras/[cameraId]/status', // PUT
   ],
-  
+
   // Public routes - no authentication required
   public: [
     '/api/events', // GET (list events)
@@ -46,7 +46,7 @@ const ROUTE_RATE_LIMITS = {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
+
   // Skip middleware for static files and Next.js internals
   if (
     pathname.startsWith('/_next/') ||
@@ -59,14 +59,14 @@ export async function middleware(request: NextRequest) {
 
   // Apply security headers to all responses
   const response = NextResponse.next();
-  
+
   // Security headers
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('X-XSS-Protection', '1; mode=block');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'camera=self, microphone=self, geolocation=(), payment=()');
-  
+
   // HSTS in production
   if (process.env.NODE_ENV === 'production') {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
@@ -89,7 +89,7 @@ export async function middleware(request: NextRequest) {
     "frame-ancestors 'none'",
     "upgrade-insecure-requests"
   ].join('; ');
-  
+
   response.headers.set('Content-Security-Policy', csp);
 
   // Skip authentication for non-API routes
@@ -117,14 +117,14 @@ export async function middleware(request: NextRequest) {
 
   // Check if route requires authentication
   const routeType = getRouteType(pathname, request.method);
-  
+
   if (routeType === 'public') {
     return response;
   }
 
   // Extract and verify authentication token
   const token = AuthService.extractTokenFromRequest(request);
-  
+
   if (!token) {
     return NextResponse.json(
       { success: false, error: 'Authentication required' },
@@ -133,7 +133,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const payload = await AuthService.verifyToken(token);
-  
+
   if (!payload) {
     return NextResponse.json(
       { success: false, error: 'Invalid or expired token' },
@@ -143,7 +143,7 @@ export async function middleware(request: NextRequest) {
 
   // Check authorization based on route type
   const hasAccess = await checkRouteAccess(routeType, payload, pathname, request);
-  
+
   if (!hasAccess) {
     return NextResponse.json(
       { success: false, error: 'Insufficient permissions' },
@@ -170,15 +170,15 @@ function getRouteType(pathname: string, method: string): RouteType {
   if (pathname === '/api/events' && method === 'POST') return 'admin';
   if (pathname.match(/^\/api\/events\/[^/]+$/) && (method === 'PUT' || method === 'DELETE')) return 'admin';
   if (pathname === '/api/auth/admin') return 'admin';
-  
+
   // Organizer routes
   if (pathname.match(/^\/api\/events\/[^/]+\/status$/) && method === 'PUT') return 'organizer';
   if (pathname.match(/^\/api\/events\/[^/]+\/cameras$/) && method === 'GET') return 'organizer';
-  
+
   // Camera routes
   if (pathname.match(/^\/api\/events\/[^/]+\/join$/) && method === 'POST') return 'camera';
   if (pathname.match(/^\/api\/events\/[^/]+\/cameras\/[^/]+\/status$/) && method === 'PUT') return 'camera';
-  
+
   // Default to public
   return 'public';
 }
@@ -193,7 +193,7 @@ async function checkRouteAccess(
   switch (routeType) {
     case 'admin':
       return payload.type === 'admin';
-      
+
     case 'organizer':
       // Admin or organizer with matching event ID
       if (payload.type === 'admin') return true;
@@ -202,7 +202,7 @@ async function checkRouteAccess(
         return eventId === payload.eventId;
       }
       return false;
-      
+
     case 'camera':
       // Admin, organizer, or camera operator with matching event ID
       if (payload.type === 'admin') return true;
@@ -210,7 +210,7 @@ async function checkRouteAccess(
       if (payload.type === 'organizer' && eventId === payload.eventId) return true;
       if (payload.type === 'camera' && eventId === payload.eventId) return true;
       return false;
-      
+
     default:
       return true; // Public routes
   }
@@ -219,7 +219,7 @@ async function checkRouteAccess(
 // Extract event ID from API path
 function extractEventIdFromPath(pathname: string): string | null {
   const match = pathname.match(/\/api\/events\/([^/]+)/);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 // Configure which routes this middleware should run on

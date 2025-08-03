@@ -67,7 +67,7 @@ describe('EventDashboard', () => {
 
   it('should render event dashboard with initial data', async () => {
     render(<EventDashboard event={mockEvent} />);
-    
+
     expect(screen.getByText('テストイベント')).toBeInTheDocument();
     expect(screen.getByText('イベントダッシュボード')).toBeInTheDocument();
     expect(screen.getByText('ABC123')).toBeInTheDocument();
@@ -75,17 +75,19 @@ describe('EventDashboard', () => {
 
   it('should show loading state when refreshing data', async () => {
     render(<EventDashboard event={mockEvent} />);
-    
+
     const refreshButtons = screen.getAllByRole('button', { name: /更新/ });
     const refreshButton = refreshButtons[0]; // 最初の更新ボタンを使用
-    
+
     // 更新ボタンをクリック
-    fireEvent.click(refreshButton);
-    
+    if (refreshButton) {
+      fireEvent.click(refreshButton);
+    }
+
     // ローディング状態を確認
     expect(refreshButton).toBeDisabled();
     expect(screen.getAllByText(/更新中/)[0]).toBeInTheDocument();
-    
+
     // ローディングが完了するまで待機
     await waitFor(() => {
       expect(refreshButton).not.toBeDisabled();
@@ -94,15 +96,17 @@ describe('EventDashboard', () => {
 
   it('should prevent duplicate refresh requests', async () => {
     render(<EventDashboard event={mockEvent} />);
-    
+
     const refreshButtons = screen.getAllByRole('button', { name: /更新/ });
     const refreshButton = refreshButtons[0]; // 最初の更新ボタンを使用
-    
+
     // 連続でクリック
-    fireEvent.click(refreshButton);
-    fireEvent.click(refreshButton);
-    fireEvent.click(refreshButton);
-    
+    if (refreshButton) {
+      fireEvent.click(refreshButton);
+      fireEvent.click(refreshButton);
+      fireEvent.click(refreshButton);
+    }
+
     // 初回データ取得 + 手動更新1回のみが実行されることを確認
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledTimes(4); // 初回: cameras + status, 手動更新: cameras + status
@@ -111,21 +115,23 @@ describe('EventDashboard', () => {
 
   it('should handle API errors gracefully', async () => {
     // エラーレスポンスを設定（fetchが失敗するようにする）
-    mockFetch.mockImplementation(() => 
+    mockFetch.mockImplementation(() =>
       Promise.reject(new Error('Network error'))
     );
 
     render(<EventDashboard event={mockEvent} />);
-    
+
     const refreshButtons = screen.getAllByRole('button', { name: /更新/ });
     const refreshButton = refreshButtons[0]; // 最初の更新ボタンを使用
-    fireEvent.click(refreshButton);
-    
+    if (refreshButton) {
+      fireEvent.click(refreshButton);
+    }
+
     // エラーメッセージが表示されることを確認
     await waitFor(() => {
       expect(screen.getByText(/データの取得に失敗しました/)).toBeInTheDocument();
     });
-    
+
     // ローディング状態が適切にリセットされることを確認
     await waitFor(() => {
       expect(refreshButton).not.toBeDisabled();
@@ -134,7 +140,7 @@ describe('EventDashboard', () => {
 
   it('should display camera and viewer statistics', async () => {
     render(<EventDashboard event={mockEvent} />);
-    
+
     // 初回データ取得が完了するまで待機
     await waitFor(() => {
       expect(screen.getByText('1')).toBeInTheDocument(); // アクティブカメラ数
@@ -144,23 +150,23 @@ describe('EventDashboard', () => {
 
   it('should auto-refresh data periodically', async () => {
     jest.useFakeTimers();
-    
+
     try {
       render(<EventDashboard event={mockEvent} />);
-      
+
       // 初回データ取得が完了するまで待機
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledTimes(2);
       });
-      
+
       mockFetch.mockClear();
-      
+
       // 30秒後に自動更新をトリガー
       jest.advanceTimersByTime(30000);
-      
+
       // タイマーによる非同期処理を実行
       await jest.runOnlyPendingTimersAsync();
-      
+
       // 自動更新が実行されたことを確認（少なくとも1回は実行される）
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/events/test-event-1/cameras'),

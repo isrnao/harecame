@@ -11,9 +11,12 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import type { NavigatorWithConnection } from '@/lib/type-guards';
+import { useFocusManagement } from '@/hooks/useFocusManagement';
 import { joinCameraAction, type CameraJoinState } from "@/app/actions/camera";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputField } from "@/components/ui/input-field";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -74,6 +77,9 @@ export function CameraJoinForm({
       ...optimisticValue,
     })
   );
+
+  // React 19: ref as propパターンを活用したフォーカス管理
+  const participationCodeFocus = useFocusManagement<HTMLInputElement>()
 
   const {
     register,
@@ -154,11 +160,9 @@ export function CameraJoinForm({
     else if (/Edge/i.test(userAgent)) browser = "edge";
 
     // Detect connection type (if available)
-    const connection =
-      (navigator as unknown as { connection?: unknown }).connection ||
-      (navigator as unknown as { mozConnection?: unknown }).mozConnection ||
-      (navigator as unknown as { webkitConnection?: unknown }).webkitConnection;
-    const connectionType = (connection as { effectiveType?: string })?.effectiveType || "unknown";
+    const nav = navigator as NavigatorWithConnection;
+    const connection = nav.connection || nav.mozConnection || nav.webkitConnection;
+    const connectionType = connection?.effectiveType || "unknown";
 
     return {
       userAgent,
@@ -171,7 +175,7 @@ export function CameraJoinForm({
 
   const onSubmit = async (data: CameraJoinFormData) => {
     console.log('Form submission started with data:', data);
-    
+
     startTransition(() => {
       // Show optimistic feedback
       setOptimisticState({
@@ -201,6 +205,14 @@ export function CameraJoinForm({
     });
   };
 
+  // React 19: エラー時の自動フォーカス管理
+  useEffect(() => {
+    if (state.errors?.participationCode) {
+      participationCodeFocus.focus()
+      participationCodeFocus.select()
+    }
+  }, [state.errors?.participationCode, participationCodeFocus])
+
   // Handle successful join
   useEffect(() => {
     if (state.success && state.eventId && state.roomToken) {
@@ -216,7 +228,7 @@ export function CameraJoinForm({
       // Store authentication tokens in localStorage for persistent auth
       if (state.authToken) {
         localStorage.setItem("harecame-token", state.authToken);
-        
+
         // Store user auth data
         const authUser = {
           id: state.cameraConnectionId || `camera-${Date.now()}`,
@@ -233,17 +245,17 @@ export function CameraJoinForm({
       sessionStorage.setItem("harecame_room_token", state.roomToken);
       sessionStorage.setItem("harecame_room_name", state.roomName || "");
       sessionStorage.setItem("harecame_event_id", state.eventId);
-      
+
       // Store LiveKit token if available
       if (state.liveKitToken) {
         sessionStorage.setItem("harecame_livekit_token", state.liveKitToken);
       }
-      
+
       // Store camera connection ID
       if (state.cameraConnectionId) {
         sessionStorage.setItem("harecame_camera_connection_id", state.cameraConnectionId);
       }
-      
+
       // Store participant name if provided
       const participantName = document.querySelector<HTMLInputElement>('#participantName')?.value;
       if (participantName) {
@@ -279,10 +291,14 @@ export function CameraJoinForm({
               <QrCode className="h-4 w-4" />
               参加コード *
             </Label>
+            {/* React 19: ref as propパターンでフォーカス管理を統合 */}
             <Input
               id="participationCode"
               placeholder="例: SPRING"
-              {...register("participationCode")}
+              {...register("participationCode", {
+                setValueAs: (value) => value.toUpperCase()
+              })}
+              ref={participationCodeFocus.ref}
               className={`text-center font-mono text-lg sm:text-xl min-h-[48px] touch-manipulation ${
                 errors.participationCode ? "border-red-500" : ""
               }`}
@@ -308,34 +324,26 @@ export function CameraJoinForm({
             )}
           </div>
 
-          {/* Participant Name */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="participantName"
-              className="flex items-center gap-2"
-            >
-              <User className="h-4 w-4" />
-              参加者名（任意）
-            </Label>
-            <Input
-              id="participantName"
-              placeholder="例: 田中太郎"
-              {...register("participantName")}
-              className={`min-h-[48px] touch-manipulation ${errors.participantName ? "border-red-500" : ""}`}
-              disabled={isPending}
-              autoComplete="name"
-            />
-            {errors.participantName && (
-              <p className="text-sm text-red-500">
-                {errors.participantName.message}
-              </p>
-            )}
-            {state.errors?.participantName && (
-              <p className="text-sm text-red-500">
-                {state.errors.participantName[0]}
-              </p>
-            )}
-          </div>
+          {/* React 19: ref as propパターンを使用したInputFieldコンポーネント */}
+          <InputField
+            label={
+              <span className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                参加者名（任意）
+              </span>
+            }
+            id="participantName"
+            placeholder="例: 田中太郎"
+            {...register("participantName")}
+            className="min-h-[48px] touch-manipulation"
+            disabled={isPending}
+            autoComplete="name"
+            error={
+              errors.participantName?.message ||
+              state.errors?.participantName?.[0]
+            }
+            helperText="表示名として使用されます（空欄の場合は自動生成）"
+          />
 
           {/* Device Info Display */}
           {isClient && (
@@ -380,9 +388,9 @@ export function CameraJoinForm({
           )}
 
           {/* Submit Button - タッチ最適化 */}
-          <Button 
-            type="submit" 
-            disabled={isPending} 
+          <Button
+            type="submit"
+            disabled={isPending}
             className="w-full min-h-[48px] touch-manipulation text-base sm:text-sm"
           >
             {isPending ? (

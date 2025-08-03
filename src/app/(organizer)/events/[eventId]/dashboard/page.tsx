@@ -8,6 +8,11 @@ import { CameraStatusGrid } from '@/components/events/CameraStatusGrid';
 import { QRCodeGenerator } from '@/components/events/QRCodeGenerator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+// Next.js 15: App Router専用の最適化設定
+export const dynamic = 'force-dynamic'; // リアルタイムダッシュボードデータのため
+export const revalidate = 10; // 10秒間隔でデータを再検証
+export const runtime = 'nodejs'; // データベース接続のためNode.jsランタイム
+
 // ダッシュボードアクセス情報の型定義
 interface DashboardAccessLog {
   eventId: string;

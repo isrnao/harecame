@@ -1,5 +1,9 @@
 // WebSocket event handling for real-time features
-import { EventLogService, CameraConnectionService, StreamStatusService } from './database';
+import {
+  EventLogService,
+  CameraConnectionService,
+  StreamStatusService,
+} from "./database";
 
 // WebSocket event types
 export interface WebSocketEvent {
@@ -13,7 +17,7 @@ export interface WebSocketEvent {
 
 // Camera connection events
 export interface CameraJoinedEvent extends WebSocketEvent {
-  type: 'camera-joined';
+  type: "camera-joined";
   participantId: string;
   cameraConnectionId: string;
   data: {
@@ -23,7 +27,7 @@ export interface CameraJoinedEvent extends WebSocketEvent {
 }
 
 export interface CameraStartedStreamingEvent extends WebSocketEvent {
-  type: 'camera-started-streaming';
+  type: "camera-started-streaming";
   participantId: string;
   cameraConnectionId: string;
   data: {
@@ -37,7 +41,7 @@ export interface CameraStartedStreamingEvent extends WebSocketEvent {
 }
 
 export interface CameraDisconnectedEvent extends WebSocketEvent {
-  type: 'camera-disconnected';
+  type: "camera-disconnected";
   participantId: string;
   cameraConnectionId: string;
   data: {
@@ -47,11 +51,11 @@ export interface CameraDisconnectedEvent extends WebSocketEvent {
 }
 
 export interface StreamSwitchedEvent extends WebSocketEvent {
-  type: 'stream-switched';
+  type: "stream-switched";
   data: {
     fromCamera?: string;
     toCamera: string;
-    reason: 'new-camera' | 'camera-disconnected' | 'manual-switch';
+    reason: "new-camera" | "camera-disconnected" | "manual-switch";
   };
 }
 
@@ -60,13 +64,13 @@ export class WebSocketEventHandler {
   // Handle camera joined event
   static async handleCameraJoined(event: CameraJoinedEvent): Promise<void> {
     try {
-      console.log('Camera joined:', event);
+      console.log("Camera joined:", event);
 
       // Log the event
       await EventLogService.create({
         eventId: event.eventId,
         cameraConnectionId: event.cameraConnectionId,
-        logType: 'camera_joined',
+        logType: "camera_joined",
         message: `Camera ${event.participantId} joined the event`,
         metadata: {
           participantName: event.data.participantName,
@@ -79,21 +83,22 @@ export class WebSocketEventHandler {
 
       // Broadcast to other participants (if needed)
       await this.broadcastEvent(event);
-
     } catch (error) {
-      console.error('Failed to handle camera joined event:', error);
+      console.error("Failed to handle camera joined event:", error);
     }
   }
 
   // Handle camera started streaming event
-  static async handleCameraStartedStreaming(event: CameraStartedStreamingEvent): Promise<void> {
+  static async handleCameraStartedStreaming(
+    event: CameraStartedStreamingEvent
+  ): Promise<void> {
     try {
-      console.log('Camera started streaming:', event);
+      console.log("Camera started streaming:", event);
 
       // Update camera connection status
       await CameraConnectionService.updateStatus(
         event.cameraConnectionId,
-        'active',
+        "active",
         event.data.streamQuality
       );
 
@@ -101,7 +106,7 @@ export class WebSocketEventHandler {
       await EventLogService.create({
         eventId: event.eventId,
         cameraConnectionId: event.cameraConnectionId,
-        logType: 'camera_streaming_started',
+        logType: "camera_streaming_started",
         message: `Camera ${event.participantId} started streaming`,
         metadata: {
           streamQuality: event.data.streamQuality,
@@ -116,28 +121,29 @@ export class WebSocketEventHandler {
 
       // Broadcast to other participants
       await this.broadcastEvent(event);
-
     } catch (error) {
-      console.error('Failed to handle camera started streaming event:', error);
+      console.error("Failed to handle camera started streaming event:", error);
     }
   }
 
   // Handle camera disconnected event
-  static async handleCameraDisconnected(event: CameraDisconnectedEvent): Promise<void> {
+  static async handleCameraDisconnected(
+    event: CameraDisconnectedEvent
+  ): Promise<void> {
     try {
-      console.log('Camera disconnected:', event);
+      console.log("Camera disconnected:", event);
 
       // Update camera connection status
       await CameraConnectionService.updateStatus(
         event.cameraConnectionId,
-        'inactive'
+        "inactive"
       );
 
       // Log the event
       await EventLogService.create({
         eventId: event.eventId,
         cameraConnectionId: event.cameraConnectionId,
-        logType: 'camera_disconnected',
+        logType: "camera_disconnected",
         message: `Camera ${event.participantId} disconnected`,
         metadata: {
           reason: event.data.reason,
@@ -153,27 +159,30 @@ export class WebSocketEventHandler {
 
       // Broadcast to other participants
       await this.broadcastEvent(event);
-
     } catch (error) {
-      console.error('Failed to handle camera disconnected event:', error);
+      console.error("Failed to handle camera disconnected event:", error);
     }
   }
 
   // Handle stream switching logic (last-in priority)
-  private static async handleStreamSwitching(event: CameraStartedStreamingEvent): Promise<void> {
+  private static async handleStreamSwitching(
+    event: CameraStartedStreamingEvent
+  ): Promise<void> {
     try {
       // Get current stream status
-      const streamStatus = await StreamStatusService.getByEventId(event.eventId);
-      
+      const streamStatus = await StreamStatusService.getByEventId(
+        event.eventId
+      );
+
       // Always switch to the newest camera (last-in priority)
       const switchEvent: StreamSwitchedEvent = {
-        type: 'stream-switched',
+        type: "stream-switched",
         eventId: event.eventId,
         timestamp: Date.now(),
         data: {
           fromCamera: streamStatus?.currentActiveCamera,
           toCamera: event.cameraConnectionId,
-          reason: 'new-camera',
+          reason: "new-camera",
         },
       };
 
@@ -187,7 +196,7 @@ export class WebSocketEventHandler {
       await EventLogService.create({
         eventId: event.eventId,
         cameraConnectionId: event.cameraConnectionId,
-        logType: 'stream_switched',
+        logType: "stream_switched",
         message: `Stream switched to camera ${event.participantId}`,
         metadata: {
           fromCamera: switchEvent.data.fromCamera,
@@ -198,40 +207,52 @@ export class WebSocketEventHandler {
 
       // Broadcast switch event
       await this.broadcastEvent(switchEvent);
-
     } catch (error) {
-      console.error('Failed to handle stream switching:', error);
+      console.error("Failed to handle stream switching:", error);
     }
   }
 
   // Handle camera disconnection and failover
-  private static async handleCameraDisconnection(event: CameraDisconnectedEvent): Promise<void> {
+  private static async handleCameraDisconnection(
+    event: CameraDisconnectedEvent
+  ): Promise<void> {
     try {
       // Get current stream status
-      const streamStatus = await StreamStatusService.getByEventId(event.eventId);
-      
+      const streamStatus = await StreamStatusService.getByEventId(
+        event.eventId
+      );
+
       // Check if the disconnected camera was the active one
       if (streamStatus?.currentActiveCamera === event.cameraConnectionId) {
         // Find another active camera to switch to
-        const activeCameras = await CameraConnectionService.getByEventId(event.eventId);
+        const activeCameras = await CameraConnectionService.getByEventId(
+          event.eventId
+        );
         const otherActiveCameras = activeCameras.filter(
-          camera => camera.status === 'active' && camera.id !== event.cameraConnectionId
+          (camera) =>
+            camera.status === "active" && camera.id !== event.cameraConnectionId
         );
 
         if (otherActiveCameras.length > 0) {
           // Switch to the most recently joined active camera
           const newActiveCamera = otherActiveCameras.sort(
-            (a, b) => new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime()
+            (a, b) =>
+              new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime()
           )[0];
 
+          if (!newActiveCamera) {
+            console.error("No active camera found despite length check");
+            return;
+          }
+
           const switchEvent: StreamSwitchedEvent = {
-            type: 'stream-switched',
+            type: "stream-switched",
             eventId: event.eventId,
             timestamp: Date.now(),
             data: {
               fromCamera: event.cameraConnectionId,
               toCamera: newActiveCamera.id,
-              reason: 'camera-disconnected',
+              reason: "camera-disconnected",
             },
           };
 
@@ -245,7 +266,7 @@ export class WebSocketEventHandler {
           await EventLogService.create({
             eventId: event.eventId,
             cameraConnectionId: newActiveCamera.id,
-            logType: 'stream_switched',
+            logType: "stream_switched",
             message: `Stream switched to camera ${newActiveCamera.participantId} due to disconnection`,
             metadata: {
               fromCamera: switchEvent.data.fromCamera,
@@ -256,7 +277,6 @@ export class WebSocketEventHandler {
 
           // Broadcast switch event
           await this.broadcastEvent(switchEvent);
-
         } else {
           // No other active cameras - show standby screen
           await StreamStatusService.upsert({
@@ -267,17 +287,16 @@ export class WebSocketEventHandler {
           // Log standby state
           await EventLogService.create({
             eventId: event.eventId,
-            logType: 'stream_standby',
-            message: 'No active cameras - showing standby screen',
+            logType: "stream_standby",
+            message: "No active cameras - showing standby screen",
             metadata: {
-              reason: 'all_cameras_disconnected',
+              reason: "all_cameras_disconnected",
             },
           });
         }
       }
-
     } catch (error) {
-      console.error('Failed to handle camera disconnection:', error);
+      console.error("Failed to handle camera disconnection:", error);
     }
   }
 
@@ -285,16 +304,17 @@ export class WebSocketEventHandler {
   private static async updateStreamStatus(eventId: string): Promise<void> {
     try {
       const cameras = await CameraConnectionService.getByEventId(eventId);
-      const activeCameras = cameras.filter(camera => camera.status === 'active');
+      const activeCameras = cameras.filter(
+        (camera) => camera.status === "active"
+      );
 
       await StreamStatusService.upsert({
         eventId,
         activeCameraCount: activeCameras.length,
         isLive: activeCameras.length > 0,
       });
-
     } catch (error) {
-      console.error('Failed to update stream status:', error);
+      console.error("Failed to update stream status:", error);
     }
   }
 
@@ -303,13 +323,12 @@ export class WebSocketEventHandler {
     try {
       // In a real implementation, this would broadcast to WebSocket clients
       // For now, we'll just log the event
-      console.log('Broadcasting event:', event.type, event.eventId);
+      console.log("Broadcasting event:", event.type, event.eventId);
 
       // Store the event for Server-Sent Events (SSE) clients
       await this.storeEventForSSE(event);
-
     } catch (error) {
-      console.error('Failed to broadcast event:', error);
+      console.error("Failed to broadcast event:", error);
     }
   }
 
@@ -320,12 +339,11 @@ export class WebSocketEventHandler {
       // In production, use Redis or similar
       const key = `sse_events:${event.eventId}`;
       const eventData = JSON.stringify(event);
-      
+
       // For now, just log - in production implement proper SSE storage
       console.log(`SSE Event stored for ${key}:`, eventData);
-
     } catch (error) {
-      console.error('Failed to store SSE event:', error);
+      console.error("Failed to store SSE event:", error);
     }
   }
 }
@@ -338,24 +356,24 @@ export class SSEHandler {
       start(controller) {
         // Send initial connection message
         const initialMessage = `data: ${JSON.stringify({
-          type: 'connected',
+          type: "connected",
           eventId,
           timestamp: Date.now(),
         })}\n\n`;
-        
+
         controller.enqueue(new TextEncoder().encode(initialMessage));
 
         // Set up periodic heartbeat
         const heartbeatInterval = setInterval(() => {
           const heartbeat = `data: ${JSON.stringify({
-            type: 'heartbeat',
+            type: "heartbeat",
             timestamp: Date.now(),
           })}\n\n`;
-          
+
           try {
             controller.enqueue(new TextEncoder().encode(heartbeat));
           } catch (error) {
-            console.error('SSE heartbeat error:', error);
+            console.error("SSE heartbeat error:", error);
             clearInterval(heartbeatInterval);
           }
         }, 30000); // 30 second heartbeat
@@ -369,14 +387,16 @@ export class SSEHandler {
   }
 
   // Send event to SSE clients
-  static async sendEventToClients(eventId: string, event: WebSocketEvent): Promise<void> {
+  static async sendEventToClients(
+    eventId: string,
+    event: WebSocketEvent
+  ): Promise<void> {
     try {
       // In a real implementation, this would send to active SSE connections
       // For now, we'll just log the event
       console.log(`SSE: Sending event to clients for ${eventId}:`, event);
-
     } catch (error) {
-      console.error('Failed to send SSE event:', error);
+      console.error("Failed to send SSE event:", error);
     }
   }
 }
@@ -386,10 +406,10 @@ export function createCameraJoinedEvent(
   eventId: string,
   participantId: string,
   cameraConnectionId: string,
-  data: CameraJoinedEvent['data']
+  data: CameraJoinedEvent["data"]
 ): CameraJoinedEvent {
   return {
-    type: 'camera-joined',
+    type: "camera-joined",
     eventId,
     participantId,
     cameraConnectionId,
@@ -402,10 +422,10 @@ export function createCameraStartedStreamingEvent(
   eventId: string,
   participantId: string,
   cameraConnectionId: string,
-  streamQuality: CameraStartedStreamingEvent['data']['streamQuality']
+  streamQuality: CameraStartedStreamingEvent["data"]["streamQuality"]
 ): CameraStartedStreamingEvent {
   return {
-    type: 'camera-started-streaming',
+    type: "camera-started-streaming",
     eventId,
     participantId,
     cameraConnectionId,
@@ -422,7 +442,7 @@ export function createCameraDisconnectedEvent(
   duration: number
 ): CameraDisconnectedEvent {
   return {
-    type: 'camera-disconnected',
+    type: "camera-disconnected",
     eventId,
     participantId,
     cameraConnectionId,

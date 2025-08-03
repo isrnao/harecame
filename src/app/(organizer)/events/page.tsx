@@ -5,6 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Calendar, Users, Video } from 'lucide-react';
 
+// Next.js 15: App Router専用の最適化設定
+export const dynamic = 'force-dynamic'; // イベントリストは動的データのため
+export const revalidate = 30; // 30秒間隔でデータを再検証
+
 export const metadata: Metadata = {
   title: 'イベント管理 - Harecame',
   description: 'ライブ配信イベントの管理画面',
@@ -12,7 +16,7 @@ export const metadata: Metadata = {
 
 export default async function EventsPage() {
   let events: Awaited<ReturnType<typeof EventService.list>> = [];
-  
+
   try {
     events = await EventService.list({ limit: 20 });
   } catch (error) {
@@ -68,13 +72,13 @@ export default async function EventsPage() {
                     </CardDescription>
                   </div>
                   <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    event.status === 'live' 
+                    event.status === 'live'
                       ? 'bg-red-100 text-red-700'
                       : event.status === 'scheduled'
                       ? 'bg-blue-100 text-blue-700'
                       : 'bg-gray-100 text-gray-700'
                   }`}>
-                    {event.status === 'live' ? 'ライブ中' : 
+                    {event.status === 'live' ? 'ライブ中' :
                      event.status === 'scheduled' ? '予定' : '終了'}
                   </div>
                 </div>
@@ -92,7 +96,7 @@ export default async function EventsPage() {
                     参加コード: <code className="font-mono font-semibold">{event.participationCode}</code>
                   </div>
                 </div>
-                
+
                 <div className="flex gap-2 mt-4">
                   <Link href={`/events/${event.id}/dashboard`} className="flex-1">
                     <Button variant="outline" size="sm" className="w-full">

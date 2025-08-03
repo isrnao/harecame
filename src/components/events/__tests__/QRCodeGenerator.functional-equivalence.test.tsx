@@ -18,8 +18,18 @@ delete (window as any).location;
 };
 
 // Next.js Image コンポーネントをモック
+interface MockImageProps {
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+  className?: string;
+  priority?: boolean;
+  [key: string]: unknown;
+}
+
 jest.mock('next/image', () => {
-  return function MockImage(props: any) {
+  return function MockImage(props: MockImageProps) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
@@ -27,7 +37,7 @@ jest.mock('next/image', () => {
         data-nimg="1"
         data-testid="next-image"
         data-optimized={props.unoptimized !== true ? 'true' : 'false'}
-        priority={props.priority ? 'true' : undefined}
+        data-priority={props.priority ? 'true' : undefined}
         className={props.className}
       />
     );
