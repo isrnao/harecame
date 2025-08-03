@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
+import type { ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -75,12 +76,12 @@ export const LazyEventCreationForm = dynamic(
 );
 
 // Wrapper component with Suspense boundary
-export function LazyComponentWrapper({ 
-  children, 
-  fallback 
-}: { 
-  children: React.ReactNode;
-  fallback?: React.ReactNode;
+export function LazyComponentWrapper({
+  children,
+  fallback
+}: {
+  children: ReactNode;
+  fallback?: ReactNode;
 }) {
   return (
     <Suspense fallback={fallback || <ComponentLoader />}>

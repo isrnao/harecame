@@ -1,12 +1,13 @@
-import * as React from "react"
-import { Input } from "./input"
-import { Label } from "./label"
-import { cn } from "@/lib/utils"
+import { useId } from "react";
+import type { ComponentPropsWithRef, ReactNode } from "react";
+import { Input } from "./input";
+import { Label } from "./label";
+import { cn } from "@/lib/utils";
 
 // React 19: ComponentPropsWithRefを使用したカスタムInputFieldコンポーネント
 // forwardRefを使用せずに、refを通常のpropsとして受け取る
-interface InputFieldProps extends React.ComponentPropsWithRef<"input"> {
-  label?: React.ReactNode
+interface InputFieldProps extends ComponentPropsWithRef<"input"> {
+  label?: ReactNode
   error?: string
   helperText?: string
   containerClassName?: string
@@ -22,7 +23,7 @@ function InputField({
   ...props
 }: InputFieldProps) {
   // React 19: useIdを常に呼び出し、idが指定されている場合はそれを優先
-  const generatedId = React.useId()
+  const generatedId = useId()
   const inputId = id || generatedId
 
   return (

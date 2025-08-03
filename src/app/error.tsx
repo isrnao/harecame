@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import Link from "next/link";
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
@@ -15,7 +15,9 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
         )}
         <div className="flex justify-center gap-2">
           <button type="button" onClick={() => reset()} className="px-4 py-2 rounded-md border">再試行</button>
-          <a href="/" className="px-4 py-2 rounded-md border">ホームに戻る</a>
+          <Link href="/" className="px-4 py-2 rounded-md border">
+            ホームに戻る
+          </Link>
         </div>
         {error.digest && (
           <p className="text-xs text-muted-foreground">エラーID: {error.digest}</p>

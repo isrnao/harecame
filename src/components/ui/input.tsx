@@ -1,9 +1,9 @@
-import * as React from "react"
+import type { ComponentPropsWithRef } from "react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 // React 19: ComponentPropsWithRefを使用してref as propパターンを明示的に実装
-function Input({ className, type, ...props }: React.ComponentPropsWithRef<"input">) {
+function Input({ className, type, ...props }: ComponentPropsWithRef<"input">) {
   return (
     <input
       type={type}

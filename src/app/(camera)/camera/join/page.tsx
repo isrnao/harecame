@@ -1,4 +1,4 @@
-import { Metadata } from 'next';
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { CameraJoinForm } from '@/components/camera/CameraJoinForm';
 import { Card, CardContent } from '@/components/ui/card';

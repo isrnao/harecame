@@ -1,6 +1,7 @@
 "use client";
 
-import React, { ErrorInfo, ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 
 type Props = {

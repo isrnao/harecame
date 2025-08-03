@@ -1,4 +1,4 @@
-import { Metadata } from 'next';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { EventService } from '@/lib/database';
 import { Button } from '@/components/ui/button';

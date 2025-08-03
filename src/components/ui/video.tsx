@@ -1,7 +1,7 @@
-import * as React from "react"
+import type { ComponentPropsWithRef } from "react";
 
-import { cn } from "@/lib/utils"
-import { hasTransformStyle, type VideoStyleProps } from "@/lib/type-guards"
+import { cn } from "@/lib/utils";
+import { hasTransformStyle, type VideoStyleProps } from "@/lib/type-guards";
 
 // React 19: ComponentPropsWithRefを使用したref as propパターンの実装例
 // forwardRefを使用せずに、refを通常のpropsとして受け取る
@@ -13,7 +13,7 @@ function Video({
   // 追加: プレビュー用に水平反転するかどうかを選べるフラグ
   mirror = false,
   ...props
-}: React.ComponentPropsWithRef<"video"> & { mirror?: boolean }) {
+}: ComponentPropsWithRef<"video"> & { mirror?: boolean }) {
   return (
     <video
       data-slot="video"

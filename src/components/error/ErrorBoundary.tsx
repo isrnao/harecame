@@ -1,6 +1,7 @@
 "use client";
 
-import React, { Component, ErrorInfo, ReactNode } from "react";
+import { Component } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import { isErrorInfo } from '@/lib/type-guards';
 import {
   Card,
@@ -46,7 +47,7 @@ export class ErrorBoundary extends Component<Props, State> {
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // React 19.1.0の強化されたエラー情報を活用
     console.error("ErrorBoundary caught an error:", error, errorInfo);
 
@@ -108,7 +109,7 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.href = "/";
   };
 
-  render() {
+  override render() {
     if (this.state.hasError) {
       // カスタムフォールバックUIが提供されている場合
       if (this.props.fallback) {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +20,7 @@ export function AdminLoginForm({ onSuccess, eventId }: AdminLoginFormProps) {
   const [adminKey, setAdminKey] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLocalError(null);
 
@@ -102,9 +103,9 @@ export function AdminLoginForm({ onSuccess, eventId }: AdminLoginFormProps) {
 
 // Protected admin route wrapper
 interface AdminRouteProps {
-  children: React.ReactNode;
+  children: ReactNode;
   eventId?: string;
-  fallback?: React.ReactNode;
+  fallback?: ReactNode;
 }
 
 export function AdminRoute({ children, eventId, fallback }: AdminRouteProps) {
