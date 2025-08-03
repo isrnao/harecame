@@ -168,5 +168,5 @@ export function extractVideoIdFromUrl(url: string): string | null {
   const regex =
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/;
   const match = url.match(regex);
-  return match?.[1] ?? null;
+  return match?.[1] || null;
 }
