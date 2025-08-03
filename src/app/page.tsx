@@ -5,7 +5,7 @@ import { Video, Users, Eye } from 'lucide-react';
 import { EventIdInput } from '@/components/ui/event-id-input';
 
 // Next.js 15: App Router専用の最適化設定
-export const dynamic = 'force-static'; // ホームページは静的コンテンツ
+export const dynamic = 'auto'; // 動的コンポーネント対応
 export const revalidate = 3600; // 1時間間隔で再生成
 
 export default function Home() {
