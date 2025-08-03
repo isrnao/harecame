@@ -33,8 +33,8 @@ export async function onRequestError(
     digest: (err as any).digest, // Next.jsのエラーダイジェスト
     url: request?.url || 'unknown',
     method: request?.method || 'unknown',
-    userAgent: request?.headers && typeof request.headers.get === 'function' 
-      ? request.headers.get('user-agent') 
+    userAgent: request?.headers && typeof request.headers.get === 'function'
+      ? request.headers.get('user-agent')
       : 'unknown',
     timestamp: new Date().toISOString(),
     routerKind: context.routerKind,
