@@ -1,4 +1,4 @@
-import { Metadata } from "next";
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { after } from 'next/server';
 import { EventService } from "@/lib/database";

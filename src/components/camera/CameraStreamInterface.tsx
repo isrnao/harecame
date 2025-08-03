@@ -52,6 +52,9 @@ import {
   Loader2,
 } from "lucide-react";
 
+const ERROR_VIDEO_TRACK_NOT_FOUND = "Video track not found";
+const ERROR_AUDIO_TRACK_NOT_FOUND = "Audio track not found";
+
 interface CameraStreamInterfaceProps {
   roomToken: string;
   roomName: string;

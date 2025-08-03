@@ -235,10 +235,12 @@ export class WebSocketEventHandler {
 
         if (otherActiveCameras.length > 0) {
           // Switch to the most recently joined active camera
-          const newActiveCamera = otherActiveCameras.sort(
-            (a, b) =>
-              new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime()
-          )[0];
+          const newActiveCamera =
+            otherActiveCameras.sort(
+              (a, b) =>
+                new Date(b.joinedAt).getTime() -
+                new Date(a.joinedAt).getTime()
+            )[0]!;
 
           
 

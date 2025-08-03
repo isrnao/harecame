@@ -2,8 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   experimental: {
-    // Enhanced Suspense support
-    reactCompiler: false, // Will enable when stable
+    // Enable the React Compiler (stable in React 19)
+    reactCompiler: true,
     // Enable optimized package imports
     optimizePackageImports: ['@livekit/components-react', 'lucide-react'],
   },

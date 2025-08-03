@@ -1,4 +1,5 @@
-import { useEffect, useCallback, createContext, useContext, ReactNode, useSyncExternalStore } from 'react';
+import { useEffect, useCallback, createContext, useContext, useSyncExternalStore } from 'react';
+import type { ReactNode } from 'react';
 
 // Authentication types
 export interface AuthUser {

@@ -1,4 +1,5 @@
-import { Room, RoomOptions, VideoPresets } from 'livekit-client';
+import { Room, VideoPresets } from 'livekit-client';
+import type { RoomOptions } from 'livekit-client';
 import { AccessToken } from 'livekit-server-sdk';
 
 // LiveKit client configuration

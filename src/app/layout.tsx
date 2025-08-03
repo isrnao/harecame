@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
 import { after } from 'next/server';
 import './globals.css';
@@ -39,7 +40,7 @@ import { AppInitializer } from '@/components/AppInitializer';
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   // after() APIを使用してアプリケーション初期化ログを応答後に記録
   after(async () => {
