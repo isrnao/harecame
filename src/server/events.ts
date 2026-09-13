@@ -19,9 +19,10 @@ export async function getPublicEvent(id: string) {
 
 export async function listEvents(actor: Actor | null, options: Parameters<typeof EventService.list>[0] = {}) {
   authorize(actor, ['organizer']);
-  if (actor.type === 'admin') return EventService.list(options);
+  const bounded = { ...options, limit: Math.min(options.limit ?? 20, 100), offset: options.offset ?? 0 };
+  if (actor.type === 'admin') return EventService.list(bounded);
   const event = actor.eventId ? await EventService.getById(actor.eventId) : null;
-  return event ? [event] : [];
+  return event && (!bounded.status || event.status === bounded.status) && bounded.offset === 0 ? [event] : [];
 }
 
 export async function createEvent(actor: Actor | null, input: unknown) {
@@ -34,6 +35,7 @@ export async function createEvent(actor: Actor | null, input: unknown) {
 export async function updateEvent(actor: Actor | null, id: string, input: unknown) {
   authorize(actor, ['organizer'], id);
   const value = updateEventSchema.strict().parse(input);
+  if (!await EventService.getById(id)) throw new AppError(404, 'イベントが見つかりません');
   return EventService.update(id, { ...value, scheduledAt: value.scheduledAt ? new Date(value.scheduledAt) : undefined });
 }
 
