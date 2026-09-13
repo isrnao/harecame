@@ -1,7 +1,7 @@
 import 'server-only';
 import { AppError } from './errors';
 
-interface Broadcast { id: string; snippet: { title: string; description?: string }; status?: { lifeCycleStatus?: string }; }
+interface Broadcast { id: string; snippet: { title: string; description?: string }; status?: { lifeCycleStatus?: string }; contentDetails?: { boundStreamId?: string }; }
 interface Stream { id: string; snippet: { title: string; description?: string }; cdn?: { ingestionInfo?: { rtmpsIngestionAddress?: string; streamName?: string } }; }
 export class YouTubeProvider {
   private token?: string;
@@ -63,6 +63,12 @@ export class YouTubeProvider {
     });
   }
   async bind(broadcastId: string, streamId: string) {
+    const current = await this.request<{ items: Broadcast[] }>('liveBroadcasts', { id: broadcastId, part: 'id,contentDetails' });
+    const broadcast = current.items[0];
+    if (!broadcast) throw new AppError(404, 'YouTube番組が見つかりません');
+    const bound = broadcast.contentDetails?.boundStreamId;
+    if (bound === streamId) return;
+    if (bound) throw new AppError(409, 'YouTube番組は別のストリームに接続されています');
     await this.request('liveBroadcasts/bind', { id: broadcastId, streamId, part: 'id,contentDetails' }, 'POST');
   }
   async status(id: string) {

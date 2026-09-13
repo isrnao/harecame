@@ -37,7 +37,7 @@ export async function reconcileEvent(eventId: string, command?: z.infer<typeof s
       const ids = [command.cameraId, command.fallbackCameraId].filter(Boolean);
       if (ids.some(id => !cameras.some(c => c.id === id))) throw new AppError(403, 'このイベントのカメラを選択してください');
       if (command.cameraId === command.fallbackCameraId) throw new AppError(400, 'メインと予備には異なるカメラを選択してください');
-      await save({ desired: 'live', selected_camera: command.cameraId, fallback_camera: command.fallbackCameraId ?? null });
+      await save({ desired: 'live', ...(session.phase === 'idle' && { phase: 'preparing' as const }), selected_camera: command.cameraId, fallback_camera: command.fallbackCameraId ?? null });
     }
     if (command?.action === 'stop') await save({ desired: 'stopped', phase: 'stopping' });
     // LiveKit is authoritative for camera presence, including browser crashes.

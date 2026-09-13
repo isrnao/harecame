@@ -62,6 +62,25 @@ describe('durable stream lifecycle', () => {
     const g = fixture(); await expect(g.run(false)).rejects.toThrow('映像');
     expect(g.ports.createStream).not.toHaveBeenCalled();
   });
+  it('stops known output even when an uncertain YouTube creation cannot be looked up', async () => {
+    const f = fixture({ desired: 'stopped', broadcast_creation_attempted: true });
+    f.ports.findBroadcast.mockRejectedValueOnce(new Error('YouTube unavailable'));
+    f.ports.listOutputs.mockResolvedValueOnce([output]).mockResolvedValue([]);
+    await expect(f.run()).rejects.toThrow();
+    expect(f.ports.stopOutput).toHaveBeenCalledWith('output');
+    expect(f.ports.closeRoom).toHaveBeenCalled();
+    expect(f.session.phase).toBe('stopping');
+    f.ports.findBroadcast.mockResolvedValue({ id: 'recovered' });
+    await f.run(); expect(f.session.phase).toBe('stopped');
+  });
+  it('waits for an ending output without sending a second stop request', async () => {
+    const f = fixture({ desired: 'stopped' });
+    f.ports.listOutputs.mockResolvedValue([{ ...output, state: 'ending' }]);
+    await f.run(); expect(f.ports.stopOutput).not.toHaveBeenCalled();
+    expect(f.session.phase).toBe('stopping');
+    f.ports.listOutputs.mockResolvedValue([{ ...output, state: 'ended' }]);
+    await f.run(); expect(f.session.phase).toBe('stopped');
+  });
   it('does not abandon an output with uncertain creation status on stop', async () => {
     const f = fixture({ desired: 'stopped', egress_creation_attempted: true });
     await expect(f.run()).rejects.toThrow('未確定'); expect(f.session.phase).toBe('stopping');

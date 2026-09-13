@@ -5,9 +5,11 @@ import { AppError } from './errors';
 
 export type Actor = JWTPayload;
 
-export async function requestActor(request: Request): Promise<Actor | null> {
+export async function requestActor(request: Request, cameraEventId?: string): Promise<Actor | null> {
   const bearer = request.headers.get('authorization');
-  const cookie = request.headers.get('cookie')?.split(';').map(v => v.trim()).find(v => v.startsWith('harecame-session='))?.slice('harecame-session='.length);
+  const values = request.headers.get('cookie')?.split(';').map(v => v.trim()) ?? [];
+  const readCookie = (name: string) => values.find(v => v.startsWith(`${name}=`))?.slice(name.length + 1);
+  const cookie = (cameraEventId ? readCookie(`harecame-camera-${cameraEventId}`) : undefined) ?? readCookie('harecame-session');
   const token = bearer?.startsWith('Bearer ') ? bearer.slice(7) : cookie;
   return token ? AuthService.verifyToken(token) : null;
 }

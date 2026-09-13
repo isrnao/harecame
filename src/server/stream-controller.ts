@@ -37,26 +37,37 @@ export async function reconcileStream({ session: s, event, layout, hasCamera, sa
     const running = outputs.filter(isRunning);
     if (s.desired === 'stopped') {
       await save({ phase: 'stopping', last_error: null });
-      // Recover creations whose responses were lost before stopping anything.
+      let shutdownError: unknown;
+      // A failed YouTube lookup must not prevent stopping billable Egress outputs.
       if (!s.broadcast_id && s.broadcast_creation_attempted) {
-        const found = await p.findBroadcast(marker);
-        if (!found) throw new AppError(409, 'YouTube作成結果が未確定です。状態確認を続けてください');
-        await save({ broadcast_id: found.id });
+        try {
+          const found = await p.findBroadcast(marker);
+          if (!found) throw new AppError(409, 'YouTube作成結果が未確定です。状態確認を続けてください');
+          await save({ broadcast_id: found.id });
+        } catch (error) { shutdownError = error; }
       }
       if (s.egress_creation_attempted && !s.egress_id && outputs.length === 0) {
-        throw new AppError(409, '配信出力の作成結果が未確定です。状態確認を続けてください');
+        shutdownError = new AppError(409, '配信出力の作成結果が未確定です。状態確認を続けてください');
       }
-      if (s.broadcast_id) { await save({}); await p.completeBroadcast(s.broadcast_id); }
-      for (const output of running) { await save({}); await p.stopOutput(output.id); }
+      if (s.broadcast_id) {
+        try { await save({}); await p.completeBroadcast(s.broadcast_id); } catch (error) { shutdownError = error; }
+      }
+      for (const output of running.filter(o => o.state !== 'ending')) {
+        try { await save({}); await p.stopOutput(output.id); } catch (error) { shutdownError = error; }
+      }
       outputs = await p.listOutputs();
-      if (outputs.some(isRunning)) return; // Finalization is asynchronous.
+      if (outputs.some(isRunning)) {
+        if (shutdownError) throw shutdownError;
+        return;
+      }
       await save({});
       await p.closeRoom();
+      if (shutdownError) throw shutdownError;
       await save({ phase: 'stopped', last_error: null });
       return;
     }
     await p.ready();
-    if (!hasCamera) throw new AppError(409, 'メイン・予備カメラの映像が届いていません。再接続を確認してください');
+    if (!hasCamera && !running.length) throw new AppError(409, 'メイン・予備カメラの映像が届いていません。再接続を確認してください');
     if (running.length > 1) throw new AppError(409, '複数の配信出力を検出しました。停止して確認してください');
     await save({ phase: running.length ? 'starting' : 'preparing', last_error: null });
     if (!s.youtube_stream_id) {
