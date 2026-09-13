@@ -21,7 +21,7 @@ export interface AuthState {
 const AUTH_STORAGE_KEY = 'harecame-auth';
 const TOKEN_STORAGE_KEY = 'harecame-token';
 
-// External store for localStorage synchronization
+// External store for sessionStorage synchronization
 class AuthStore {
   private listeners = new Set<() => void>();
   private authState: AuthState = {
@@ -32,7 +32,7 @@ class AuthStore {
   private cachedSnapshot: AuthState | null = null;
 
   constructor() {
-    // Initialize from localStorage on client side
+    // Initialize from sessionStorage on client side
     if (typeof window !== 'undefined') {
       this.initializeFromStorage();
     }
@@ -40,8 +40,10 @@ class AuthStore {
 
   private initializeFromStorage() {
     try {
-      const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
-      const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      const storedAuth = sessionStorage.getItem(AUTH_STORAGE_KEY);
+      const storedToken = sessionStorage.getItem(TOKEN_STORAGE_KEY);
 
       if (storedAuth && storedToken) {
         const user: AuthUser = JSON.parse(storedAuth);
@@ -56,8 +58,8 @@ class AuthStore {
           return;
         } else {
           // Token expired, clear storage
-          localStorage.removeItem(AUTH_STORAGE_KEY);
-          localStorage.removeItem(TOKEN_STORAGE_KEY);
+          sessionStorage.removeItem(AUTH_STORAGE_KEY);
+          sessionStorage.removeItem(TOKEN_STORAGE_KEY);
         }
       }
 
@@ -95,11 +97,11 @@ class AuthStore {
 
   setUser = (user: AuthUser | null) => {
     if (user) {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-      localStorage.setItem(TOKEN_STORAGE_KEY, user.token);
+      sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+      sessionStorage.setItem(TOKEN_STORAGE_KEY, user.token);
     } else {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      sessionStorage.removeItem(AUTH_STORAGE_KEY);
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     }
 
     this.authState = {
@@ -140,7 +142,7 @@ const authStore = new AuthStore();
 
 // Custom hook for authentication management
 export function useAuth() {
-  // Use external store for localStorage synchronization
+  // Use external store for sessionStorage synchronization
   const authState = useSyncExternalStore(
     authStore.subscribe,
     authStore.getSnapshot,
@@ -221,12 +223,17 @@ export function useAuth() {
         expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(), // 8 hours
       };
 
+      const joined = await fetch(`/api/events/${user.eventId}/join`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` }, body: '{}',
+      });
+      const grant = await joined.json();
+      if (!joined.ok) throw new Error(grant.error || 'Camera admission failed');
       authStore.setUser(user);
 
       return {
         user,
         event: data.data.event,
-        liveKitToken: data.data.tokens.liveKitToken,
+        liveKitToken: grant.data.roomToken,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Authentication failed';

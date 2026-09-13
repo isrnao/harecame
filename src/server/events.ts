@@ -4,6 +4,7 @@ import { createEventSchema, updateEventSchema } from '@/lib/validation';
 import type { EventClient } from '@/types';
 import { authorize, type Actor } from './access';
 import { AppError } from './errors';
+import { readSession } from './stream-store';
 
 // Explicit allowlist: participation codes and provider credentials are never public.
 export function publicEvent(event: EventClient) {
@@ -43,6 +44,8 @@ export async function deleteEvent(actor: Actor | null, id: string) {
   authorize(actor, ['organizer'], id);
   const [event, status] = await Promise.all([EventService.getById(id), StreamStatusService.getByEventId(id)]);
   if (!event) throw new AppError(404, 'イベントが見つかりません');
+  const session = await readSession(id);
+  if (session && session.phase !== 'idle') throw new AppError(409, '配信履歴のあるイベントは監査のため保持します');
   if (event.status === 'live' || status?.isLive) throw new AppError(409, '配信を停止してから削除してください');
   await EventService.delete(id);
 }

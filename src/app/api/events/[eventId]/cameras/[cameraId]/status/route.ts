@@ -1,159 +1,22 @@
-import { authorize, requestActor } from '@/server/access';
-import { AppError } from '@/server/errors';
+import { z } from 'zod';
 import { NextRequest, NextResponse } from 'next/server';
-import { CameraConnectionService, EventLogService } from '@/lib/database';
-import { 
-  rateLimit, 
-  validateRequestBody, 
-  withErrorHandling, 
-  requestLogger,
-  securityHeaders,
-  RATE_LIMITS 
-} from '@/lib/middleware';
+import { CameraConnectionService } from '@/lib/database';
+import { requestActor, authorize } from '@/server/access';
+import { AppError } from '@/server/errors';
+import { withErrorHandling, rateLimit, RATE_LIMITS } from '@/lib/middleware';
 import { updateCameraStatusSchema } from '@/lib/validation';
-import { isValidUUID } from '@/lib/validation';
-import { 
-  WebSocketEventHandler, 
-  createCameraStartedStreamingEvent, 
-  createCameraDisconnectedEvent 
-} from '@/lib/websocket';
-
-export const PUT = withErrorHandling(async (
-  request: NextRequest,
-  { params }: { params: Promise<{ eventId: string; cameraId: string }> }
-) => {
-  // Apply middleware
-  requestLogger(request);
-  
-  const rateLimitResult = await rateLimit(RATE_LIMITS.statusUpdate)(request);
-  if (rateLimitResult) return rateLimitResult;
-
-  const { eventId, cameraId } = await params;
-  const actor = await requestActor(request);
-  authorize(actor, ['organizer', 'camera'], eventId);
-  
-  // Validate UUID formats
-  if (!isValidUUID(eventId) || !isValidUUID(cameraId)) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Invalid ID format',
-      },
-      { status: 400, headers: securityHeaders() }
-    );
-  }
-
-  // Validate request body
-  const bodyValidation = await validateRequestBody(updateCameraStatusSchema)(request);
-  if (bodyValidation instanceof NextResponse) return bodyValidation;
-  
-  const { status, streamQuality } = bodyValidation.data;
-
-  console.log('Updating camera status:', {
-    eventId,
-    cameraId,
-    status,
-    streamQuality
-  });
-
-  // Get current camera connection to check previous status
-  const currentCamera = await CameraConnectionService.getById(cameraId);
-  if (!currentCamera) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Camera connection not found',
-      },
-      { status: 404, headers: securityHeaders() }
-    );
-  }
-
-  // Verify camera belongs to the event
-  if (currentCamera.eventId !== eventId) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Camera does not belong to this event',
-      },
-      { status: 400, headers: securityHeaders() }
-    );
-  }
-
-  if (actor.type === 'camera' && currentCamera.participantId !== actor.sub) throw new AppError(403, '別のカメラは操作できません');
-  const previousStatus = currentCamera.status;
-
-  // Update camera connection status
-  const updatedCamera = await CameraConnectionService.updateStatus(
-    cameraId,
-    status,
-    streamQuality
-  );
-
-  console.log('Camera status updated successfully:', updatedCamera.id);
-
-  // Handle WebSocket events based on status changes
-  if (status === 'active' && previousStatus !== 'active' && streamQuality) {
-    // Camera started streaming
-    const streamingEvent = createCameraStartedStreamingEvent(
-      eventId,
-      currentCamera.participantId,
-      cameraId,
-      {
-        resolution: streamQuality.resolution || 'unknown',
-        frameRate: streamQuality.frameRate || 0,
-        bitrate: streamQuality.bitrate || 0,
-        codec: streamQuality.codec || 'unknown',
-      }
-    );
-
-    // Handle the event asynchronously
-    WebSocketEventHandler.handleCameraStartedStreaming(streamingEvent).catch(error => {
-      console.error('Failed to handle camera started streaming event:', error);
-    });
-
-  } else if (status === 'inactive' && previousStatus === 'active') {
-    // Camera disconnected
-    const disconnectionDuration = currentCamera.joinedAt 
-      ? Math.floor((Date.now() - new Date(currentCamera.joinedAt).getTime()) / 1000)
-      : 0;
-
-    const disconnectedEvent = createCameraDisconnectedEvent(
-      eventId,
-      currentCamera.participantId,
-      cameraId,
-      'manual_disconnect',
-      disconnectionDuration
-    );
-
-    // Handle the event asynchronously
-    WebSocketEventHandler.handleCameraDisconnected(disconnectedEvent).catch(error => {
-      console.error('Failed to handle camera disconnected event:', error);
-    });
-  }
-
-  // Log the status change
-  EventLogService.create({
-    eventId,
-    cameraConnectionId: cameraId,
-    logType: 'camera_status_update',
-    message: `Camera status changed from ${previousStatus} to ${status}`,
-    metadata: {
-      previousStatus,
-      newStatus: status,
-      streamQuality,
-      userAgent: request.headers.get('user-agent'),
-      ip: request.headers.get('x-forwarded-for') || 'unknown',
-    },
-  }).catch(error => {
-    console.error('Failed to log status update:', error);
-  });
-
-  return NextResponse.json(
-    {
-      success: true,
-      message: 'Camera status updated successfully',
-      data: updatedCamera,
-    },
-    { headers: securityHeaders() }
-  );
+import { database } from '@/server/stream-store';
+// Browser updates are telemetry only. Only provider reconciliation assigns presence.
+export const PUT = withErrorHandling(async (request: NextRequest, context: { params: Promise<{ eventId: string; cameraId: string }> }) => {
+  const { eventId, cameraId } = z.object({ eventId: z.uuid(), cameraId: z.uuid() }).parse(await context.params);
+  const limited = await rateLimit(RATE_LIMITS.statusUpdate)(request); if (limited) return limited;
+  const actor = await requestActor(request, eventId);
+  authorize(actor, ['camera', 'organizer'], eventId);
+  const camera = await CameraConnectionService.getById(cameraId);
+  if (!camera || camera.eventId !== eventId) throw new AppError(404, 'カメラが見つかりません');
+  if (actor.type === 'camera' && camera.participantId !== actor.sub) throw new AppError(403, '別のカメラは操作できません');
+  const { streamQuality } = updateCameraStatusSchema.parse(await request.json());
+  const { error } = await database().from('camera_connections').update({ last_active_at: new Date().toISOString(), ...(streamQuality && { stream_quality: streamQuality }) }).eq('id', cameraId);
+  if (error) throw new AppError(503, 'カメラ情報の更新に失敗しました');
+  return NextResponse.json({ success: true });
 });

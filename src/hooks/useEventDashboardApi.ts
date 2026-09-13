@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { getYouTubeStreamStats, type YouTubeStreamStats } from "@/lib/youtube";
+import type { YouTubeStreamStats } from "@/lib/youtube";
 import type { CameraConnectionClient, StreamStatusClient } from "@/types";
 
 interface FetchDataOptions {
@@ -80,19 +80,6 @@ export function useEventDashboardApi() {
             statusResponse.status,
             statusResponse.statusText
           );
-        }
-
-        // YouTube統計を取得（動画IDがある場合のみ）
-        if (youtubeVideoId) {
-          try {
-            console.log("Fetching YouTube stats for:", youtubeVideoId);
-            const stats = await getYouTubeStreamStats(youtubeVideoId);
-            result.youtubeStats = stats;
-            console.log("YouTube stats updated:", stats);
-          } catch (youtubeError) {
-            console.warn("Failed to fetch YouTube stats:", youtubeError);
-            // YouTube統計の取得失敗は致命的エラーとしない
-          }
         }
 
         console.log("Event data fetch completed successfully");

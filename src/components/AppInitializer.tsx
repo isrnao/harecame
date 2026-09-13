@@ -6,6 +6,8 @@ import { initializeApp, waitForInitialization } from '@/lib/app-initialization';
 // アプリケーション初期化コンポーネント
 export function AppInitializer() {
   useEffect(() => {
+    // Recorder URLs carry a short-lived provider token; never send analytics.
+    if (window.location.pathname === '/egress') return;
     // アプリケーション初期化を実行
     const initialize = async () => {
       try {

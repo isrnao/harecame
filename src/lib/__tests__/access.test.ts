@@ -5,6 +5,7 @@ import type { EventClient } from '@/types';
 jest.mock('server-only', () => ({}), { virtual: true });
 jest.mock('@/lib/auth', () => ({}));
 jest.mock('@/lib/database', () => ({}));
+jest.mock('@/server/stream-store', () => ({}));
 jest.mock('next/headers', () => ({}));
 
 const actor = (type: Actor['type'], eventId = 'event-a') => ({ type, eventId, sub: 'user-a' }) as Actor;
