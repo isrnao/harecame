@@ -264,7 +264,7 @@ Thumbs.db
 .supabase/
 
 # LiveKit
-livekit/
+/livekit/
 
 # SWC cache
 .swc/

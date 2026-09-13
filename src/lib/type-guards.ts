@@ -188,13 +188,12 @@ export function isMockRequestOptions(value: unknown): value is MockRequestOption
 // AuthService のモック型定義
 export interface MockAuthService {
   generateCameraToken: jest.MockedFunction<(participantId: string, eventId: string, participantName?: string) => Promise<string>>;
-  generateLiveKitToken: jest.MockedFunction<(participantId: string, eventId: string, participantName?: string) => Promise<string>>;
   generateAdminToken: jest.MockedFunction<(adminId: string, eventId?: string) => Promise<string>>;
   [key: string]: any;
 }
 
 export function isMockAuthService(value: unknown): value is MockAuthService {
-  return isObject(value) && 'generateCameraToken' in value && 'generateLiveKitToken' in value;
+  return isObject(value) && 'generateCameraToken' in value;
 }
 
 // テスト環境の型定義

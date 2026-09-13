@@ -356,7 +356,7 @@ export class StreamStatusService {
     eventId: string;
     isLive?: boolean;
     activeCameraCount?: number;
-    currentActiveCamera?: string;
+    currentActiveCamera?: string | null;
     youtubeViewerCount?: number;
     streamHealth?: StreamStatus['stream_health'];
   }): Promise<StreamStatusClient> {
