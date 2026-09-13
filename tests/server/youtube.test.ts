@@ -21,7 +21,7 @@ test('YouTube creates an unlisted archival broadcast and binds its RTMPS stream'
   const { client, calls } = provider([
     { access_token: 'access-token' },
     { id: 'stream', snippet: { title: 'Event' }, cdn: { ingestionInfo: { rtmpsIngestionAddress: 'rtmps://test/live/', streamName: 'private-key' } } },
-    { id: 'broadcast' }, {},
+    { id: 'broadcast' }, { items: [{ id: 'broadcast', contentDetails: {} }] }, {},
   ]);
   const stream = await client.createStream('Event', '[harecame:event]');
   assert.equal(ingestionUrl(stream), 'rtmps://test/live/private-key');
@@ -34,9 +34,9 @@ test('YouTube creates an unlisted archival broadcast and binds its RTMPS stream'
   assert.equal(settings.enableAutoStart, true);
   assert.equal(settings.enableAutoStop, false);
   assert.equal(settings.recordFromStart, true);
-  assert.equal(calls[3]!.url.searchParams.get('streamId'), 'stream');
-  assert.equal(calls[3]!.init.method, 'POST');
-  assert.equal(new Headers(calls[3]!.init.headers).get('authorization'), 'Bearer access-token');
+  assert.equal(calls[4]!.url.searchParams.get('streamId'), 'stream');
+  assert.equal(calls[4]!.init.method, 'POST');
+  assert.equal(new Headers(calls[4]!.init.headers).get('authorization'), 'Bearer access-token');
 });
 
 test('lost creation lookup follows pagination and does not create another resource', async () => {
@@ -62,4 +62,11 @@ test('provider errors never include credential-bearing response bodies', async (
     assert.equal((error as Error).message, 'YouTube操作に失敗しました（HTTP 403）');
     return true;
   });
+});
+
+test('invalid OAuth and incomplete ingestion responses fail before creating an output', async () => {
+  const { client, calls } = provider([new Response('private-oauth-error', { status: 401 })]);
+  await assert.rejects(client.ready(), /YouTube認証に失敗/);
+  assert.equal(calls.length, 1);
+  assert.throws(() => ingestionUrl({ id: 'stream', snippet: { title: 'Event' } }), /配信先が取得できません/);
 });

@@ -1,13 +1,17 @@
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { openSync, closeSync } from 'node:fs';
+import { openSync, closeSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 process.loadEnvFile('.env.local');
 const adminKey = randomBytes(32).toString('hex');
 const workerSecret = randomBytes(32).toString('hex');
 const base = 'http://127.0.0.1:3100';
-const fd = openSync('/private/tmp/harecame-browser-server.log', 'w', 0o600);
+const artifacts = mkdtempSync(join(tmpdir(), 'harecame-browser-'));
+console.log(`Browser verification artifacts: ${artifacts}`);
+const fd = openSync(join(artifacts, 'server.log'), 'w', 0o600);
 const server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '-p', '3100', '-H', '127.0.0.1'], {
   env: { ...process.env, ADMIN_KEY: adminKey, RECONCILE_SECRET: workerSecret, APP_URL: base, NODE_ENV: 'development' },
   stdio: ['ignore', fd, fd],
@@ -31,6 +35,13 @@ try {
   const authHeaders = { cookie: adminCookie, 'Content-Type': 'application/json' };
   const created = await request('/api/events', { method: 'POST', headers: authHeaders, body: JSON.stringify({ title: '自動検証用イベント' }) });
   assert.equal(created.response.status, 201); eventId = created.body.data.event.id;
+  const onlyStatus = await request(`/api/events/${eventId}?include_status=true`, { headers: authHeaders });
+  assert.equal(onlyStatus.body.data.cameras, undefined);
+  assert.ok('streamStatus' in onlyStatus.body.data);
+  const onlyCameras = await request(`/api/events/${eventId}?include_cameras=true`, { headers: authHeaders });
+  assert.equal(onlyCameras.body.data.streamStatus, undefined);
+  assert.ok(Array.isArray(onlyCameras.body.data.cameras));
+  assert.equal((await request('/api/events/not-a-uuid/status')).response.status, 400);
   const participationCode = created.body.data.event.participationCode;
   const publicResult = await request(`/api/events/${eventId}`);
   assert.equal(publicResult.body.data.event.participationCode, undefined);
@@ -68,6 +79,8 @@ try {
   await page.getByLabel(/参加者名/).fill('検証カメラ');
   await page.getByRole('button', { name: /参加/ }).click();
   await page.waitForURL(`**/camera/${eventId}`, { timeout: 45000 });
+  assert.equal(await page.evaluate(() => localStorage.getItem('harecame-auth')), null);
+  assert.equal(await page.evaluate(id => sessionStorage.getItem(`harecame_camera_auth_${id}`), eventId), null);
   await page.getByRole('button', { name: 'カメラを開始', exact: true }).click();
   await page.getByText('映像送信中', { exact: true }).waitFor({ timeout: 45000 });
   // Reconcile actual LiveKit publishing state, without creating any YouTube output.
@@ -81,7 +94,7 @@ try {
   }
   assert.ok(dashboard.body.data.cameras.some(camera => camera.status === 'active'));
   assert.equal(dashboard.body.data.streamStatus.isLive, false);
-  await page.screenshot({ path: '/private/tmp/harecame-camera-smoke.png' });
+  await page.screenshot({ path: join(artifacts, 'harecame-camera-smoke.png') });
   await page.getByRole('button', { name: '送信を停止' }).click();
   await page.getByText('未接続', { exact: true }).waitFor();
   await page.getByRole('button', { name: '再接続', exact: true }).click();
@@ -95,12 +108,12 @@ try {
   await dashboardPage.goto(`${base}/events/${eventId}/dashboard`);
   await dashboardPage.getByText('配信操作', { exact: true }).waitFor();
   await dashboardPage.getByText('未開始', { exact: true }).waitFor();
-  await dashboardPage.screenshot({ path: '/private/tmp/harecame-dashboard-smoke.png', fullPage: true });
+  await dashboardPage.screenshot({ path: join(artifacts, 'harecame-dashboard-smoke.png'), fullPage: true });
   console.log('PASS browser: authenticated dashboard and stream controls');
 } catch (error) {
   if (cameraPage && !cameraPage.isClosed()) {
     console.log('Camera page alerts:', await cameraPage.getByRole('alert').allTextContents());
-    await cameraPage.screenshot({ path: '/private/tmp/harecame-camera-failure.png' }).catch(() => {});
+    await cameraPage.screenshot({ path: join(artifacts, 'harecame-camera-failure.png') }).catch(() => {});
   }
   throw error;
 } finally {

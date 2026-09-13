@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiRequest } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -9,7 +9,8 @@ interface Props { eventId: string; cameras: CameraConnectionClient[]; streamStat
   activeCamera: CameraConnectionClient | null; onActiveCameraChange(camera: CameraConnectionClient | null): void; }
 interface Control { phase: string; desired: string; selectedCamera: string | null; fallbackCamera: string | null; lastError: string | null; updatedAt?: string | null; watchUrl?: string | null; }
 const labels: Record<string, string> = { idle: '未開始', preparing: '配信を準備中', starting: '配信先の確認中', live: '配信中', stopping: '配信を停止中', stopped: '終了', failed: '要確認' };
-export function StreamManagementPanel({ eventId, cameras, activeCamera, onActiveCameraChange }: Props) {
+export function StreamManagementPanel({ eventId, cameras, activeCamera }: Props) {
+  const initialized = useRef<string | null>(null);
   const [state, setState] = useState<Control | null>(null);
   const [primary, setPrimary] = useState('');
   const [backup, setBackup] = useState('');
@@ -19,6 +20,10 @@ export function StreamManagementPanel({ eventId, cameras, activeCamera, onActive
   const load = useCallback(async () => {
     const current = await apiRequest<Control>(`/api/events/${eventId}/control`);
     setState(current);
+    if (initialized.current !== eventId) {
+      setPrimary(current.selectedCamera ?? ''); setBackup(current.fallbackCamera ?? '');
+      initialized.current = eventId;
+    }
   }, [eventId]);
   useEffect(() => {
     let stopped = false;
@@ -32,7 +37,7 @@ export function StreamManagementPanel({ eventId, cameras, activeCamera, onActive
       const current = await apiRequest<Control>(`/api/events/${eventId}/control`, { method: 'POST', body: JSON.stringify({ action,
         ...(['start','select'].includes(action) && { cameraId: primary, fallbackCameraId: backup || null }) }) });
       setState(current);
-      onActiveCameraChange(cameras.find(c => c.id === current.selectedCamera) ?? null);
+      // The parent dashboard uses provider-observed currentActiveCamera, not the configured primary.
     } catch (e) { setError(e instanceof Error ? e.message : '操作に失敗しました'); await load().catch(() => {}); }
     finally { setBusy(false); }
   };
@@ -46,10 +51,10 @@ export function StreamManagementPanel({ eventId, cameras, activeCamera, onActive
     {state?.updatedAt && state.phase !== 'idle' && state.phase !== 'stopped' && Date.now() - new Date(state.updatedAt).getTime() > 90000 && <p role="alert">状態の確認が遅れています。配信状態を再確認してください。</p>}
     {(error || state?.lastError) && <Alert variant="destructive"><AlertDescription>{error || state?.lastError}</AlertDescription></Alert>}
     <div className="grid gap-3 sm:grid-cols-2">
-      <label className="space-y-2">メインカメラ<select aria-label="メインカメラ" className="w-full rounded border p-2" value={primary} onChange={e => setPrimary(e.target.value)}>
+      <label className="space-y-2">メインカメラ<select aria-label="メインカメラ" className="w-full rounded border p-2" value={primary} onChange={e => { initialized.current = eventId; setPrimary(e.target.value); if (e.target.value === backup) setBackup(''); }}>
         <option value="">カメラを選択</option>{cameras.map(c => <option key={c.id} value={c.id}>{c.participantName || c.participantId}（{c.status === 'active' ? '映像あり' : '待機'}）</option>)}
       </select></label>
-      <label className="space-y-2">予備カメラ<select aria-label="予備カメラ" className="w-full rounded border p-2" value={backup} onChange={e => setBackup(e.target.value)}>
+      <label className="space-y-2">予備カメラ<select aria-label="予備カメラ" className="w-full rounded border p-2" value={backup} onChange={e => { initialized.current = eventId; setBackup(e.target.value); }}>
         <option value="">使用しない</option>{cameras.filter(c => c.id !== primary).map(c => <option key={c.id} value={c.id}>{c.participantName || c.participantId}</option>)}
       </select></label>
     </div>

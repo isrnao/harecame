@@ -103,7 +103,7 @@ pnpm preflight
 pnpm dev
 ```
 
-`start-local-livekit.mjs`はポート7880のローカル検証用です。Egressは起動しません。通常の`pnpm dev`はポート3000ですが、この検証スクリプトのWebhook通知先はブラウザテストに合わせたポート3100です。通常の配信開発・本番では通知先を実際のアプリURLへ設定してください。
+`start-local-livekit.mjs`はポート7880のローカル検証用です。Egressは起動しません。Webhook通知先は`WORKER_APP_URL`、`APP_URL`、`http://127.0.0.1:3000`の順で決まります。ブラウザ検証時は`WORKER_APP_URL=http://127.0.0.1:3100 node scripts/start-local-livekit.mjs`で起動してください。
 
 YouTubeへの配信を動かす場合は、Egressからアクセスできる公開HTTPSの`APP_URL`とYouTube OAuthを設定し、別プロセスでワーカーを起動します。
 
@@ -127,7 +127,8 @@ pnpm worker
 | `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` | YouTube OAuthクライアント |
 | `YOUTUBE_REFRESH_TOKEN` | 配信対象チャンネルの更新用トークン。`youtube.force-ssl`スコープが必要 |
 | `RECONCILE_SECRET` | 定期ワーカーのAPI認証。管理者キーと別の値にする |
-| `WORKER_APP_URL` | 任意。ワーカーからアプリへ接続する内部URL |
+| `WORKER_APP_URL` | 任意。ワーカーの接続先とローカルLiveKitのWebhook送信先 |
+| `TRUSTED_PROXY_SECRET` | 任意。接続元IPを通知するプロキシの認証用。未設定ならレート制限は共有バケット |
 
 未設定のサービスをモック成功に置き換えません。イベント作成自体はYouTubeに依存しませんが、配信開始には各サービスの設定が必要です。
 
@@ -201,6 +202,7 @@ pnpm worker
 
 - 管理者は全イベントを管理し、主催者はJWTに署名されたイベントだけを操作できます。
 - ブラウザの管理セッションはHttpOnly Cookieを使います。本番ではSecure、SameSite=Strictを設定します。Server Actionsもサーバー側で確認します。
+- 撮影画面のアプリ認証はイベント別HttpOnly Cookieで保持します。旧版が保存したlocalStorageの認証情報は参加時に削除します。API経由のBearer認証を使う場合もブラウザではsessionStorageに限定します。
 - カメラ用アプリJWTとLiveKit接続JWTは用途・署名鍵・権限が異なります。LiveKit JWTでアプリを操作することはできません。
 - カメラの参加者IDはサーバーで生成し、再接続でも署名済みのIDを使います。他のカメラIDを指定した補助情報の更新は拒否します。
 - 公開イベント情報は許可した項目だけを返し、参加コード・配信キー・内部ルーム名を含めません。

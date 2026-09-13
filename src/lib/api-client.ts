@@ -4,8 +4,8 @@ export async function apiRequest<T>(url: string, init: RequestInit = {}, cameraE
   if (init.body) headers.set('Content-Type', 'application/json');
   if (cameraEventId) {
     const token = sessionStorage.getItem(`harecame_camera_auth_${cameraEventId}`);
-    if (!token) throw new Error('参加セッションがありません。参加コードから入り直してください');
-    headers.set('Authorization', `Bearer ${token}`);
+    // Server Action clients use an HttpOnly event cookie. API clients may use a session-scoped bearer.
+    if (token) headers.set('Authorization', `Bearer ${token}`);
   }
   const response = await fetch(url, { ...init, headers, credentials: 'same-origin', cache: 'no-store' });
   const body = await response.json();

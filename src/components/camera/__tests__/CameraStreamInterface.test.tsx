@@ -62,3 +62,17 @@ it('does not publish when camera permission is denied', async () => {
   await screen.findByText('カメラ・マイクへのアクセスが拒否されました');
   expect(mockRoom.localParticipant.publishTrack).not.toHaveBeenCalled();
 });
+
+it('stops late media after the permission timeout without publishing', async () => {
+  jest.useFakeTimers();
+  let resolve!: (value: typeof stream) => void;
+  getMedia.mockReturnValue(new Promise(r => { resolve = r; }));
+  const view = render(<CameraStreamInterface {...props} />);
+  try {
+    await act(async () => { await jest.advanceTimersByTimeAsync(15000); });
+    expect(screen.getByText('カメラ・マイクを起動できません')).toBeInTheDocument();
+    await act(async () => { resolve(stream); });
+    expect(stopVideo).toHaveBeenCalled(); expect(stopAudio).toHaveBeenCalled();
+    expect(mockRoom.localParticipant.publishTrack).not.toHaveBeenCalled();
+  } finally { view.unmount(); jest.useRealTimers(); }
+});

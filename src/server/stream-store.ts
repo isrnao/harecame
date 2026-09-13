@@ -35,8 +35,7 @@ export async function withStreamLease<T>(eventId: string, work: (session: Stream
   const heartbeat = leaseHeartbeat(async () => {
     const { data, error } = await database().from('stream_sessions')
       .update({ lease_until: new Date(Date.now() + 120000).toISOString() }).eq('event_id', eventId)
-      .eq('lease_token', token).gt('lease_until', new Date().toISOString()).select('event_id').maybeSingle()
-      .abortSignal(AbortSignal.timeout(10000));
+      .eq('lease_token', token).gt('lease_until', new Date().toISOString()).select('event_id').abortSignal(AbortSignal.timeout(10000)).maybeSingle();
     if (error || !data) throw new AppError(409, '配信処理のロックが失効しました');
   });
   try {

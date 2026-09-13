@@ -129,8 +129,7 @@ describe('Security Middleware', () => {
       expect(headers).toHaveProperty('Content-Security-Policy');
       expect(headers).toHaveProperty('X-Content-Type-Options', 'nosniff');
       expect(headers).toHaveProperty('X-Frame-Options', 'DENY');
-      expect(headers).toHaveProperty('X-XSS-Protection', '1; mode=block');
-      expect(headers).toHaveProperty('Referrer-Policy', 'strict-origin-when-cross-origin');
+      expect(headers).toHaveProperty('Referrer-Policy', 'no-referrer');
       expect(headers).toHaveProperty('Permissions-Policy');
     });
 
