@@ -52,7 +52,7 @@ export function QRCodeGenerator({ event }: QRCodeGeneratorProps) {
           setQrCodeDataUrl(dataUrl);
         }
       } catch (error) {
-        console.error('QRコード生成エラー:', error);
+        console.error('Failed to generate QR code:', error);
         if (!isCancelled) {
           setQrCodeDataUrl('');
         }

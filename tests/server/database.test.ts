@@ -14,6 +14,7 @@ test('PostgreSQL enforces private tables, partial patches, leases and atomic cam
     await db.exec(initial);
     await db.exec(await readFile('supabase/migrations/202609130001_server_data_boundary.sql', 'utf8'));
     await db.exec(await readFile('supabase/migrations/202609130002_stream_control.sql', 'utf8'));
+    await db.exec(await readFile('supabase/migrations/202609140001_admission_limits.sql', 'utf8'));
     const id = '11111111-1111-4111-8111-111111111111';
     await db.query('INSERT INTO events(id,title,participation_code,livekit_room_name) VALUES($1,$2,$3,$4)', [id,'試合','ABCDEF','room']);
     await db.query('SELECT patch_stream_status($1,$2)', [id, { is_live: true, youtube_viewer_count: 42 }]);
@@ -23,6 +24,10 @@ test('PostgreSQL enforces private tables, partial patches, leases and atomic cam
     await db.exec('SET ROLE anon');
     await assert.rejects(db.query('SELECT * FROM events'));
     await assert.rejects(db.query('SELECT patch_stream_status($1,$2)', [id, {}]));
+    await db.exec('RESET ROLE');
+    await db.exec('SET ROLE service_role');
+    for (let i = 0; i < 10; i++) assert.equal((await db.query<{ok: boolean}>("SELECT consume_admission_limit('same-ip') AS ok")).rows[0]!.ok, true);
+    assert.equal((await db.query<{ok: boolean}>("SELECT consume_admission_limit('same-ip') AS ok")).rows[0]!.ok, false);
     await db.exec('RESET ROLE');
     const lease1 = '22222222-2222-4222-8222-222222222222', lease2 = '33333333-3333-4333-8333-333333333333';
     assert.equal((await db.query<{ ok: boolean }>('SELECT acquire_stream_lease($1,$2) AS ok', [id,lease1])).rows[0]!.ok, true);

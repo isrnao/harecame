@@ -260,7 +260,7 @@ export function withErrorHandling<T extends unknown[]>(
 export function requestLogger(request: NextRequest): null {
   const timestamp = new Date().toISOString();
   const method = request.method;
-  const url = request.url;
+  const url = new URL(request.url).pathname;
   const userAgent = request.headers.get('user-agent') || 'unknown';
   const ip = request.headers.get('x-forwarded-for') || 'unknown';
   

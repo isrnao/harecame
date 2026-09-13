@@ -1,10 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
-import { Inter } from 'next/font/google';
 import { after } from 'next/server';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Harecame - ライブ配信サービス',
@@ -55,7 +53,7 @@ export default function RootLayout({
 
   return (
     <html lang="ja">
-      <body className={inter.className}>
+      <body className="font-sans">
         <AppInitializer />
         <ErrorBoundary>
           {children}

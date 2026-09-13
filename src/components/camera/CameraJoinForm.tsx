@@ -227,7 +227,7 @@ export function CameraJoinForm({
 
       // Store authentication tokens in localStorage for persistent auth
       if (state.authToken) {
-        localStorage.setItem("harecame-token", state.authToken);
+        sessionStorage.setItem(`harecame_camera_auth_${state.eventId}`, state.authToken);
 
         // Store user auth data
         const authUser = {

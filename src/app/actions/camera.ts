@@ -1,18 +1,14 @@
 'use server';
 import { headers, cookies } from 'next/headers';
-import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { AuthService } from '@/lib/auth';
-import { rateLimit, RATE_LIMITS } from '@/lib/middleware';
+import { limitAdmission } from '@/server/admission-limit';
 import { validateCameraCode, admitCamera, cameraIdentity } from '@/server/cameras';
 import { publicEvent } from '@/server/events';
 import { AppError } from '@/server/errors';
 export type CameraJoinState = { success: boolean; message: string; errors?: { participationCode?: string[]; participantName?: string[] };
   eventId?: string; roomToken?: string; roomName?: string; cameraConnectionId?: string; authToken?: string; liveKitToken?: string };
-async function limitJoin() {
-  const limited = await rateLimit(RATE_LIMITS.joinEvent)(new NextRequest('https://harecame.invalid/camera/join', { method: 'POST', headers: await headers() }));
-  if (limited) throw new AppError(429, '参加操作が多すぎます。少し待ってお試しください');
-}
+async function limitJoin() { await limitAdmission(await headers()); }
 export async function joinCameraAction(_previous: CameraJoinState, form: FormData): Promise<CameraJoinState> {
   try {
     await limitJoin();

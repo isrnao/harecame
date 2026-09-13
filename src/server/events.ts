@@ -53,5 +53,7 @@ export async function getDashboard(actor: Actor | null, id: string) {
   const event = await EventService.getById(id);
   if (!event) throw new AppError(404, 'イベントが見つかりません');
   const [cameras, streamStatus] = await Promise.all([CameraConnectionService.getByEventId(id), StreamStatusService.getByEventId(id)]);
-  return { event, cameras, streamStatus };
+  const stale = !streamStatus?.updatedAt || Date.now() - new Date(streamStatus.updatedAt).getTime() > 90000;
+  return { event, cameras, streamStatus: streamStatus && stale
+    ? { ...streamStatus, isLive: false, streamHealth: 'unknown' as const } : streamStatus };
 }

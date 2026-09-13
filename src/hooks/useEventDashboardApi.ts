@@ -1,138 +1,18 @@
-import { useCallback, useRef } from "react";
-import type { YouTubeStreamStats } from "@/lib/youtube";
-import type { CameraConnectionClient, StreamStatusClient } from "@/types";
-
-interface FetchDataOptions {
-  eventId: string;
-  youtubeVideoId?: string;
-  signal?: AbortSignal;
-}
-
-interface FetchDataResult {
-  cameras: CameraConnectionClient[];
-  streamStatus: StreamStatusClient | null;
-  youtubeStats: YouTubeStreamStats | null;
-}
-
-/**
- * イベントダッシュボードのデータ取得を管理するフック
- */
+import { useCallback, useRef } from 'react';
+import { apiRequest } from '@/lib/api-client';
+import type { CameraConnectionClient, StreamStatusClient } from '@/types';
 export function useEventDashboardApi() {
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  // React 19: ref cleanup機能を活用した自動クリーンアップ
-  const cancelPreviousRequest = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      // React 19: ref cleanup機能により自動的にnullに設定される
+  const current = useRef<AbortController | null>(null);
+  const cleanup = useCallback(() => current.current?.abort(), []);
+  const fetchEventData = useCallback(async ({ eventId }: { eventId: string; youtubeVideoId?: string }) => {
+    current.current?.abort(); const controller = new AbortController(); current.current = controller;
+    try {
+      const result = await apiRequest<{ cameras: CameraConnectionClient[]; streamStatus: StreamStatusClient | null }>(`/api/events/${eventId}?include_cameras=true&include_status=true`, { signal: controller.signal });
+      return { cameras: result.cameras, streamStatus: result.streamStatus, youtubeStats: null };
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') throw e;
+      throw new Error('データの取得に失敗しました。ログイン状態と接続を確認してください');
     }
   }, []);
-
-  // データを取得する
-  const fetchEventData = useCallback(
-    async (options: FetchDataOptions): Promise<FetchDataResult> => {
-      const { eventId, youtubeVideoId, signal } = options;
-
-      console.log("Fetching event data for:", eventId);
-
-      const result: FetchDataResult = {
-        cameras: [],
-        streamStatus: null,
-        youtubeStats: null,
-      };
-
-      try {
-        // カメラ情報を取得
-        const camerasResponse = await fetch(`/api/events/${eventId}/cameras`, {
-          signal,
-        });
-        console.log("Cameras response status:", camerasResponse.status);
-
-        if (camerasResponse.ok) {
-          const camerasData = await camerasResponse.json();
-          result.cameras = camerasData.data || [];
-          console.log(
-            "Cameras data updated:",
-            result.cameras.length,
-            "cameras"
-          );
-        } else {
-          console.warn(
-            "Cameras fetch failed:",
-            camerasResponse.status,
-            camerasResponse.statusText
-          );
-        }
-
-        // ストリーム状態を取得
-        const statusResponse = await fetch(`/api/events/${eventId}/status`, {
-          signal,
-        });
-        console.log("Status response status:", statusResponse.status);
-
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json();
-          result.streamStatus = statusData.data;
-          console.log("Stream status updated:", result.streamStatus);
-        } else {
-          console.warn(
-            "Status fetch failed:",
-            statusResponse.status,
-            statusResponse.statusText
-          );
-        }
-
-        console.log("Event data fetch completed successfully");
-        return result;
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          console.log("Fetch request was aborted");
-          throw error;
-        }
-
-        console.error("Failed to fetch event data:", error);
-        throw new Error(
-          `データの取得に失敗しました: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`
-        );
-      }
-    },
-    []
-  );
-
-  // 新しいリクエストを開始する（前回のリクエストをキャンセル）
-  const fetchEventDataWithCancellation = useCallback(
-    async (
-      options: Omit<FetchDataOptions, "signal">
-    ): Promise<FetchDataResult> => {
-      // 前回のリクエストをキャンセル
-      cancelPreviousRequest();
-
-      // 新しいAbortControllerを作成
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
-
-      const result = await fetchEventData({
-        ...options,
-        signal: abortController.signal,
-      });
-
-      // React 19: ref cleanup機能により自動的にクリアされる
-
-      return result;
-    },
-    [fetchEventData, cancelPreviousRequest]
-  );
-
-  // クリーンアップ
-  const cleanup = useCallback(() => {
-    cancelPreviousRequest();
-  }, [cancelPreviousRequest]);
-
-  return {
-    fetchEventData: fetchEventDataWithCancellation,
-    cancelPreviousRequest,
-    cleanup,
-  };
+  return { fetchEventData, cleanup, cancelPreviousRequest: cleanup };
 }

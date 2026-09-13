@@ -53,7 +53,8 @@ export function StreamViewer({
     return null;
   };
 
-  const videoId = extractVideoId(streamUrl);
+  const [observedVideoId, setObservedVideoId] = useState<string | null>(null);
+  const videoId = observedVideoId || extractVideoId(streamUrl);
 
   // 視聴開始時の分析追跡
   useEffect(() => {
@@ -85,8 +86,9 @@ export function StreamViewer({
         }
 
         const data = await response.json();
-        if (data.success && data.streamStatus) {
-          setStreamStatus(data.streamStatus);
+        if (data.success && data.data) {
+          setStreamStatus({ ...data.data, viewerCount: data.data.youtubeViewerCount });
+          setObservedVideoId(data.data.youtubeVideoId ?? null);
           setError(null); // エラーをクリア
         } else {
           setError("ストリーム情報の形式が正しくありません。");

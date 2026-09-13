@@ -23,6 +23,7 @@ export async function readSession(eventId: string): Promise<StreamSession | null
 export function sessionView(session: StreamSession | null) {
   return { phase: session?.phase ?? 'idle', desired: session?.desired ?? 'stopped',
     selectedCamera: session?.selected_camera ?? null, fallbackCamera: session?.fallback_camera ?? null,
+    watchUrl: session?.broadcast_id ? `https://www.youtube.com/watch?v=${session.broadcast_id}` : null,
     lastError: session?.last_error ?? null, updatedAt: session?.updated_at ?? null };
 }
 export async function withStreamLease<T>(eventId: string, work: (session: StreamSession, save: (patch: Partial<StreamSession>) => Promise<void>) => Promise<T>) {

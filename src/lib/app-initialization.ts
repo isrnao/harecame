@@ -156,7 +156,7 @@ function setupGlobalErrorHandlers(): void {
           stack: event.reason?.stack,
           timestamp: new Date().toISOString(),
           userAgent: navigator.userAgent,
-          url: window.location.href,
+          url: window.location.origin + window.location.pathname,
           errorId: `unhandled-${Date.now()}`,
         }),
       }).catch(() => {
@@ -179,7 +179,7 @@ function setupGlobalErrorHandlers(): void {
           stack: event.error?.stack,
           timestamp: new Date().toISOString(),
           userAgent: navigator.userAgent,
-          url: window.location.href,
+          url: window.location.origin + window.location.pathname,
           errorId: `js-error-${Date.now()}`,
         }),
       }).catch(() => {
@@ -258,7 +258,7 @@ function sendToAnalytics(metric: WebVitalsMetric): void {
       value: metric.value,
       id: metric.id,
       timestamp: Date.now(),
-      url: window.location.href,
+      url: window.location.origin + window.location.pathname,
       userAgent: navigator.userAgent,
     }),
   }).catch(() => {

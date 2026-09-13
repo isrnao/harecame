@@ -46,17 +46,27 @@ export async function reconcileStream({ session: s, event, layout, hasCamera, sa
       if (s.egress_creation_attempted && !s.egress_id && outputs.length === 0) {
         throw new AppError(409, '配信出力の作成結果が未確定です。状態確認を続けてください');
       }
-      if (s.broadcast_id) { await save({}); await p.completeBroadcast(s.broadcast_id); }
-      for (const output of running) { await save({}); await p.stopOutput(output.id); }
+      let shutdownError: unknown;
+      if (s.broadcast_id) {
+        try { await save({}); await p.completeBroadcast(s.broadcast_id); } catch (error) { shutdownError = error; }
+      }
+      // One provider failing must not prevent stopping the other provider's billable resources.
+      for (const output of running) {
+        try { await save({}); await p.stopOutput(output.id); } catch (error) { shutdownError = error; }
+      }
       outputs = await p.listOutputs();
-      if (outputs.some(isRunning)) return; // Finalization is asynchronous.
+      if (outputs.some(isRunning)) {
+        if (shutdownError) throw shutdownError;
+        return; // Finalization is asynchronous.
+      }
       await save({});
       await p.closeRoom();
+      if (shutdownError) throw shutdownError;
       await save({ phase: 'stopped', last_error: null });
       return;
     }
     await p.ready();
-    if (!hasCamera) throw new AppError(409, 'メイン・予備カメラの映像が届いていません。再接続を確認してください');
+    if (!hasCamera && !running.length) throw new AppError(409, 'メイン・予備カメラの映像が届いていません。再接続を確認してください');
     if (running.length > 1) throw new AppError(409, '複数の配信出力を検出しました。停止して確認してください');
     await save({ phase: running.length ? 'starting' : 'preparing', last_error: null });
     if (!s.youtube_stream_id) {

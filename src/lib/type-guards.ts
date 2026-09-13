@@ -255,13 +255,7 @@ export interface MockQRCodeToDataURL {
 }
 
 export function createMockQRCodeToDataURL(): MockQRCodeToDataURL {
-  const mock = jest.fn() as any;
-  mock.mockResolvedValue = jest.fn().mockReturnValue(mock);
-  mock.mockRejectedValueOnce = jest.fn().mockReturnValue(mock);
-  mock.mockImplementationOnce = jest.fn().mockReturnValue(mock);
-  mock.mockClear = jest.fn();
-  mock.mockReset = jest.fn();
-  return mock;
+  return jest.fn() as unknown as MockQRCodeToDataURL;
 }
 
 // テスト用のモック要素型定義

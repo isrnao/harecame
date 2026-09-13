@@ -24,4 +24,3 @@ export function createRoom(options?: Partial<RoomOptions>): Room {
     ...options,
   });
 }
-

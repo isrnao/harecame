@@ -35,33 +35,12 @@ describe('EventDashboard', () => {
     mockFetch.mockClear();
     // デフォルトのレスポンスを設定
     mockFetch.mockImplementation((url: string) => {
-      if (url.includes('/cameras')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            data: [
-              { id: 'camera-1', status: 'active', name: 'カメラ1' },
-              { id: 'camera-2', status: 'inactive', name: 'カメラ2' },
-            ],
-          }),
-        });
-      }
-      if (url.includes('/status')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            data: {
-              isLive: true,
-              streamHealth: 'excellent',
-              youtubeViewerCount: 150,
-            },
-          }),
-        });
-      }
-      return Promise.resolve({
-        ok: false,
-        status: 404,
-      });
+      if (url.includes('include_cameras')) return Promise.resolve({ ok: true, json: async () => ({ success: true, data: {
+        cameras: [{ id: 'camera-1', status: 'active', participantId: 'one', deviceInfo: {}, streamQuality: {} },
+          { id: 'camera-2', status: 'inactive', participantId: 'two', deviceInfo: {}, streamQuality: {} }],
+        streamStatus: { isLive: true, streamHealth: 'excellent', youtubeViewerCount: 150, currentActiveCamera: 'camera-1' }
+      } }) });
+      return Promise.resolve({ ok: true, json: async () => ({ success: true, data: { phase: 'idle' } }) });
     });
   });
 
@@ -109,7 +88,7 @@ describe('EventDashboard', () => {
 
     // 初回データ取得 + 手動更新1回のみが実行されることを確認
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(4); // 初回: cameras + status, 手動更新: cameras + status
+      expect(mockFetch.mock.calls.filter(([url]) => String(url).includes('include_cameras'))).toHaveLength(2);
     });
   });
 
@@ -169,11 +148,11 @@ describe('EventDashboard', () => {
 
       // 自動更新が実行されたことを確認（少なくとも1回は実行される）
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/events/test-event-1/cameras'),
+        expect.stringContaining('/api/events/test-event-1?include_cameras=true'),
         expect.any(Object)
       );
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/events/test-event-1/status'),
+        expect.stringContaining('include_status=true'),
         expect.any(Object)
       );
     } finally {

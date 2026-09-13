@@ -1,327 +1,64 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CameraStreamInterface } from '../CameraStreamInterface';
-
-// LiveKit client のモック
-const mockRoom = {
-  connect: jest.fn(),
-  disconnect: jest.fn().mockResolvedValue(undefined),
-  on: jest.fn(),
-  off: jest.fn(),
-  state: 'disconnected',
-  localParticipant: {
-    publishTrack: jest.fn(),
-    videoTrackPublications: new Map(),
-  },
-};
-
+const listeners = new Map<string, () => void>();
+const mockRoom = { connect: jest.fn(), disconnect: jest.fn(),
+  on: jest.fn((e: string, fn: () => void) => listeners.set(e, fn)), off: jest.fn((e: string) => listeners.delete(e)),
+  localParticipant: { publishTrack: jest.fn() } };
+const mockTrack = () => ({ stop: jest.fn(), isMuted: false,
+  async mute() { this.isMuted = true; }, async unmute() { this.isMuted = false; } });
 jest.mock('livekit-client', () => ({
-  Room: jest.fn().mockImplementation(() => mockRoom),
-  RoomEvent: {
-    ConnectionStateChanged: 'connectionStateChanged',
-    ConnectionQualityChanged: 'connectionQualityChanged',
-    Disconnected: 'disconnected',
-  },
-  LocalVideoTrack: jest.fn().mockImplementation(() => ({
-    sid: 'video-track-sid',
-    sender: null,
-    mute: jest.fn(),
-    unmute: jest.fn(),
-    stop: jest.fn(),
-  })),
-  LocalAudioTrack: jest.fn().mockImplementation(() => ({
-    sid: 'audio-track-sid',
-    mute: jest.fn(),
-    unmute: jest.fn(),
-    stop: jest.fn(),
-  })),
-  ConnectionState: {
-    Disconnected: 'disconnected',
-    Connected: 'connected',
-    Connecting: 'connecting',
-  },
-  ConnectionQuality: {
-    Unknown: 'unknown',
-    Poor: 'poor',
-    Good: 'good',
-    Excellent: 'excellent',
-  },
-  Track: {
-    Source: {
-      Camera: 'camera',
-      Microphone: 'microphone',
-    },
-  },
+  Room: jest.fn(() => mockRoom), RoomEvent: { Reconnecting: 'reconnecting', Reconnected: 'reconnected', Disconnected: 'disconnected' },
+  LocalVideoTrack: jest.fn(() => mockTrack()), LocalAudioTrack: jest.fn(() => mockTrack()), Track: { Source: { Camera: 'camera', Microphone: 'microphone' } },
 }));
-
-// カスタムフックのモック
-jest.mock('@/hooks/useDeviceOrientation', () => ({
-  useDeviceOrientation: () => ({
-    orientation: 'landscape',
-    angle: 0,
-  }),
-}));
-
-jest.mock('@/hooks/useNetworkQuality', () => ({
-  useNetworkQuality: () => ({
-    networkQuality: {
-      effectiveType: '4g',
-      downlink: 10,
-    },
-    recommendedQuality: {
-      width: 1280,
-      height: 720,
-      frameRate: 30,
-    },
-  }),
-}));
-
-jest.mock('@/hooks/useNetworkStatus', () => ({
-  useNetworkStatus: () => ({
-    retryWithBackoff: jest.fn().mockImplementation((fn) => fn()),
-  }),
-}));
-
-// getUserMedia のモック
-const mockGetUserMedia = jest.fn();
-Object.defineProperty(navigator, 'mediaDevices', {
-  writable: true,
-  value: {
-    getUserMedia: mockGetUserMedia,
-  },
+const props = { roomToken: 'old-token', roomName: 'room', eventId: 'event-a', eventTitle: '試合', participantName: '担当者' };
+const stopVideo = jest.fn(), stopAudio = jest.fn();
+const stream = { getTracks: () => [{ stop: stopVideo }, { stop: stopAudio }], getVideoTracks: () => [{ stop: stopVideo }], getAudioTracks: () => [{ stop: stopAudio }] };
+const getMedia = jest.fn();
+beforeEach(() => {
+  jest.clearAllMocks(); listeners.clear();
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: getMedia } });
+  getMedia.mockResolvedValue(stream); mockRoom.connect.mockResolvedValue(undefined); mockRoom.disconnect.mockResolvedValue(undefined);
+  mockRoom.localParticipant.publishTrack.mockResolvedValue(undefined);
+  sessionStorage.setItem('harecame_camera_auth_event-a', 'camera-auth');
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, data: { roomToken: 'fresh-token', cameraConnectionId: 'camera-a' } }) });
 });
-
-// 環境変数のモック
-process.env.NEXT_PUBLIC_LIVEKIT_URL = 'wss://test-livekit.example.com';
-
-describe('CameraStreamInterface React Hooks Optimization', () => {
-  const defaultProps = {
-    roomToken: 'test-token',
-    roomName: 'test-room',
-    eventId: 'event-123',
-    eventTitle: 'Test Event',
-    participantName: 'Test User',
-  };
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    
-    // getUserMedia のデフォルトモック
-    mockGetUserMedia.mockResolvedValue({
-      getVideoTracks: () => [{ id: 'video-track' }],
-      getAudioTracks: () => [{ id: 'audio-track' }],
-    });
-
-    // sessionStorage のモック
-    Object.defineProperty(window, 'sessionStorage', {
-      value: {
-        getItem: jest.fn(),
-        setItem: jest.fn(),
-        removeItem: jest.fn(),
-      },
-      writable: true,
-    });
-
-    // fetch のモック
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
-
-    // mockRoom の状態をリセット
-    mockRoom.state = 'disconnected';
-    mockRoom.connect.mockResolvedValue(undefined);
-    mockRoom.disconnect.mockResolvedValue(undefined);
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
-  describe('useCallback Hook Optimization', () => {
-    it('should render component successfully', async () => {
-      render(<CameraStreamInterface {...defaultProps} />);
-      
-      // コンポーネントが正常にレンダリングされることを確認
-      expect(screen.getByText('Test Event')).toBeInTheDocument();
-      expect(screen.getByText('Test Userとして参加中')).toBeInTheDocument();
-    });
-
-    it('should initialize media on component mount', async () => {
-      render(<CameraStreamInterface {...defaultProps} />);
-      
-      // メディア初期化が呼ばれることを確認
-      await waitFor(() => {
-        expect(mockGetUserMedia).toHaveBeenCalled();
-      });
-    });
-
-    it('should handle button clicks without errors', async () => {
-      render(<CameraStreamInterface {...defaultProps} />);
-      
-      // カメラ開始ボタンが存在することを確認
-      const cameraButton = screen.getByRole('button', { name: /カメラを開始|カメラ開始/i });
-      expect(cameraButton).toBeInTheDocument();
-      
-      // ボタンクリックがエラーなく処理されることを確認
-      fireEvent.click(cameraButton);
-      
-      // メディア初期化が呼ばれることを確認
-      await waitFor(() => {
-        expect(mockGetUserMedia).toHaveBeenCalled();
-      });
-    });
-
-    it('should handle component re-renders efficiently', async () => {
-      const { rerender } = render(<CameraStreamInterface {...defaultProps} />);
-      
-      // 初回レンダリング
-      expect(screen.getByText('Test Event')).toBeInTheDocument();
-      
-      // 同じpropsで再レンダリング
-      rerender(<CameraStreamInterface {...defaultProps} />);
-      
-      // コンポーネントが正常に再レンダリングされることを確認
-      expect(screen.getByText('Test Event')).toBeInTheDocument();
-    });
-
-    it('should use useCallback for event handlers', async () => {
-      render(<CameraStreamInterface {...defaultProps} />);
-      
-      // useCallbackが使用されていることを間接的に確認
-      // コンポーネントが正常にレンダリングされ、イベントハンドラーが設定されていることを確認
-      expect(screen.getByText('Test Event')).toBeInTheDocument();
-      
-      // カメラ開始ボタンが存在し、クリック可能であることを確認
-      const cameraButton = screen.getByRole('button', { name: /カメラを開始|カメラ開始/i });
-      expect(cameraButton).toBeInTheDocument();
-      expect(cameraButton).not.toBeDisabled();
-    });
-
-    it('should verify useCallback optimization exists', async () => {
-      render(<CameraStreamInterface {...defaultProps} />);
-      
-      // useCallbackが使用されていることを間接的に確認
-      // コンポーネントが正常にレンダリングされ、メディア初期化が行われることを確認
-      await waitFor(() => {
-        expect(mockGetUserMedia).toHaveBeenCalled();
-      });
-      
-      // useCallbackによる最適化が実装されていることを確認
-      expect(screen.getByText('Test Event')).toBeInTheDocument();
-    });
-
-  });
-
-  describe('Dependency Array Accuracy', () => {
-    it('should verify dependency arrays are correctly set', async () => {
-      render(<CameraStreamInterface {...defaultProps} />);
-      
-      // 依存関係配列が正しく設定されていることを間接的に確認
-      // コンポーネントが正常にレンダリングされることを確認
-      expect(screen.getByText('Test Event')).toBeInTheDocument();
-      
-      // メディア初期化が呼ばれることを確認
-      await waitFor(() => {
-        expect(mockGetUserMedia).toHaveBeenCalled();
-      });
-    });
-  });
-
-  describe('Component Re-rendering Optimization', () => {
-    it('should handle re-renders efficiently', async () => {
-      const { rerender } = render(<CameraStreamInterface {...defaultProps} />);
-      
-      // 初回レンダリング
-      expect(screen.getByText('Test Event')).toBeInTheDocument();
-      
-      // 同じpropsで再レンダリング
-      rerender(<CameraStreamInterface {...defaultProps} />);
-      
-      // コンポーネントが正常に再レンダリングされることを確認
-      expect(screen.getByText('Test Event')).toBeInTheDocument();
-    });
-  });
-
-  describe('Memory Leak Prevention', () => {
-    it('should clean up event listeners on unmount', async () => {
-      const mockRoom = {
-        connect: jest.fn(),
-        disconnect: jest.fn(),
-        on: jest.fn(),
-        off: jest.fn(),
-        state: 'disconnected',
-        localParticipant: {
-          publishTrack: jest.fn(),
-          videoTrackPublications: new Map(),
-        },
-      };
-
-      const { Room } = require('livekit-client');
-      Room.mockImplementation(() => mockRoom);
-
-      const { unmount } = render(<CameraStreamInterface {...defaultProps} />);
-      
-      // イベントリスナーが設定されることを確認
-      expect(mockRoom.on).toHaveBeenCalledWith('connectionStateChanged', expect.any(Function));
-      expect(mockRoom.on).toHaveBeenCalledWith('connectionQualityChanged', expect.any(Function));
-      expect(mockRoom.on).toHaveBeenCalledWith('disconnected', expect.any(Function));
-
-      // コンポーネントをアンマウント
-      unmount();
-
-      // イベントリスナーが削除されることを確認
-      expect(mockRoom.off).toHaveBeenCalledWith('connectionStateChanged', expect.any(Function));
-      expect(mockRoom.off).toHaveBeenCalledWith('connectionQualityChanged', expect.any(Function));
-      expect(mockRoom.off).toHaveBeenCalledWith('disconnected', expect.any(Function));
-    });
-
-    it('should clean up media tracks on unmount', async () => {
-      const mockVideoTrack = {
-        mute: jest.fn(),
-        unmute: jest.fn(),
-        stop: jest.fn(),
-      };
-
-      const mockAudioTrack = {
-        mute: jest.fn(),
-        unmute: jest.fn(),
-        stop: jest.fn(),
-      };
-
-      const { LocalVideoTrack, LocalAudioTrack } = require('livekit-client');
-      LocalVideoTrack.mockImplementation(() => mockVideoTrack);
-      LocalAudioTrack.mockImplementation(() => mockAudioTrack);
-
-      const { unmount } = render(<CameraStreamInterface {...defaultProps} />);
-      
-      // メディア初期化を待つ
-      await waitFor(() => {
-        expect(mockGetUserMedia).toHaveBeenCalled();
-      });
-
-      // コンポーネントをアンマウント
-      unmount();
-
-      // メディアトラックが停止されることを確認
-      expect(mockVideoTrack.stop).toHaveBeenCalled();
-      expect(mockAudioTrack.stop).toHaveBeenCalled();
-    });
-
-    it('should clean up resources on unmount', async () => {
-      const { unmount } = render(<CameraStreamInterface {...defaultProps} />);
-      
-      // メディア初期化を待つ
-      await waitFor(() => {
-        expect(mockGetUserMedia).toHaveBeenCalled();
-      });
-
-      // コンポーネントをアンマウント
-      unmount();
-
-      // クリーンアップが実行されることを確認（エラーなくアンマウントされる）
-      // 接続していない場合はdisconnectは呼ばれないので、単にエラーなくアンマウントされることを確認
-      expect(mockGetUserMedia).toHaveBeenCalled();
-    });
-  });
+it('previews locally and only publishes after the operator starts, with a fresh credential', async () => {
+  render(<CameraStreamInterface {...props} />);
+  await waitFor(() => expect(getMedia).toHaveBeenCalledTimes(1));
+  expect(mockRoom.connect).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'カメラを開始' }));
+  await screen.findByText('映像送信中');
+  expect(mockRoom.connect).toHaveBeenCalledWith(expect.any(String), 'fresh-token');
+  expect(mockRoom.localParticipant.publishTrack).toHaveBeenCalledTimes(2);
+  const headers = (global.fetch as jest.Mock).mock.calls[0][1].headers as Headers;
+  expect(headers.get('Authorization')).toBe('Bearer camera-auth');
+});
+it('releases all media when grant renewal fails and displays the failure', async () => {
+  (global.fetch as jest.Mock).mockResolvedValue({ ok: false, json: async () => ({ success: false, error: 'イベントは終了しています' }) });
+  render(<CameraStreamInterface {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'カメラを開始' }));
+  await screen.findByText('イベントは終了しています');
+  expect(stopVideo).toHaveBeenCalled(); expect(stopAudio).toHaveBeenCalled();
+  expect(mockRoom.connect).not.toHaveBeenCalled();
+});
+it('releases tracks if the component unmounts before getUserMedia resolves', async () => {
+  let resolve!: (value: typeof stream) => void;
+  getMedia.mockReturnValue(new Promise(r => { resolve = r; }));
+  const view = render(<CameraStreamInterface {...props} />); view.unmount();
+  await act(async () => { resolve(stream); });
+  expect(stopVideo).toHaveBeenCalled(); expect(stopAudio).toHaveBeenCalled();
+});
+it('shows reconnecting and recovered states from LiveKit', async () => {
+  render(<CameraStreamInterface {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'カメラを開始' })); await screen.findByText('映像送信中');
+  act(() => listeners.get('reconnecting')?.()); expect(screen.getByRole('status')).toHaveTextContent('再接続中');
+  act(() => listeners.get('reconnected')?.()); expect(screen.getByRole('status')).toHaveTextContent('映像送信中');
+  fireEvent.click(screen.getByRole('button', { name: '送信を停止' }));
+  await screen.findByText('未接続'); expect(stopVideo).toHaveBeenCalled(); expect(stopAudio).toHaveBeenCalled();
+});
+it('does not publish when camera permission is denied', async () => {
+  getMedia.mockRejectedValue(new DOMException('denied', 'NotAllowedError'));
+  render(<CameraStreamInterface {...props} />);
+  await screen.findByText('カメラ・マイクへのアクセスが拒否されました');
+  expect(mockRoom.localParticipant.publishTrack).not.toHaveBeenCalled();
 });

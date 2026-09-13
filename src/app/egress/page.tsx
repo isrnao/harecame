@@ -11,6 +11,8 @@ export default function EgressPage() {
   const audio = useRef<HTMLAudioElement>(null);
   const [waiting, setWaiting] = useState(true);
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get('url') || !params.get('token')) return;
     const room = new Room();
     let disposed = false;
     let layout = parseCameraLayout(EgressHelper.getLayout());

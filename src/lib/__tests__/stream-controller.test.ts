@@ -28,6 +28,15 @@ describe('durable stream lifecycle', () => {
     await f.run(); expect(f.session.phase).toBe('live');
     expect(f.ports.startOutput).toHaveBeenCalledTimes(1); expect(f.ports.createBroadcast).toHaveBeenCalledTimes(1);
   });
+  it('keeps an existing live program running with its standby layout when all cameras disconnect', async () => {
+    const f = fixture(); await f.run();
+    f.ports.listOutputs.mockResolvedValue([output]); f.ports.broadcastStatus.mockResolvedValue('live');
+    await f.run(false);
+    expect(f.session.phase).toBe('live');
+    expect(f.ports.updateLayout).toHaveBeenCalled();
+    expect(f.ports.startOutput).toHaveBeenCalledTimes(1);
+    expect(f.ports.stopOutput).not.toHaveBeenCalled();
+  });
   it('does not duplicate output after a timeout; recovers the discovered output', async () => {
     const f = fixture(); f.ports.startOutput.mockRejectedValueOnce(new Error('timeout with secret url'));
     await expect(f.run()).rejects.toThrow('通信');
@@ -53,7 +62,9 @@ describe('durable stream lifecycle', () => {
   it('keeps shutdown retryable on a provider failure', async () => {
     const f = fixture({ desired: 'stopped', phase: 'live', broadcast_id: 'broadcast' });
     f.ports.completeBroadcast.mockRejectedValueOnce(new Error('unavailable'));
+    f.ports.listOutputs.mockResolvedValueOnce([output]).mockResolvedValue([]);
     await expect(f.run()).rejects.toThrow(); expect(f.session.phase).toBe('stopping');
+    expect(f.ports.stopOutput).toHaveBeenCalledWith('output');
     await f.run(); expect(f.session.phase).toBe('stopped');
   });
   it('rejects multiple outputs and missing selected cameras', async () => {
