@@ -6,7 +6,6 @@ import type { Actor } from '@/server/access';
 jest.mock('../database', () => ({ EventService: { list: jest.fn(), getById: jest.fn(), update: jest.fn() } }));
 jest.mock('../auth', () => ({}));
 jest.mock('next/headers', () => ({}));
-jest.mock('@/server/stream-store', () => ({ readSession: jest.fn() }), { virtual: true });
 const actor = { type: 'organizer', sub: 'organizer', eventId: 'event-a' } as Actor;
 afterEach(() => { jest.clearAllMocks(); delete process.env.TRUSTED_PROXY_SECRET; });
 it('restores CSP and production HSTS without upgrading development HTTP', () => {
