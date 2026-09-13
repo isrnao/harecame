@@ -1,6 +1,9 @@
 // Jest setup file for global test configuration
 import '@testing-library/jest-dom';
 
+// Unit tests deliberately exercise server modules under jsdom.
+jest.mock('server-only', () => ({}));
+
 // Polyfill for TextEncoder/TextDecoder in Node.js environment
 import { TextEncoder, TextDecoder } from 'util';
 

@@ -18,16 +18,12 @@ const isValidUrl = (url: string | undefined): boolean => {
 
 const hasValidSupabaseConfig = isValidUrl(supabaseUrl) && supabaseAnonKey && !supabaseAnonKey.includes('your_supabase');
 
-if (!hasValidSupabaseConfig) {
-  console.warn('Supabase configuration not available - database operations are unavailable');
-}
-
 export const supabase = hasValidSupabaseConfig && supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
 // Server-side client with service role key
-export const supabaseAdmin = hasValidSupabaseConfig && 
+export const supabaseAdmin = isValidUrl(supabaseUrl) &&
   supabaseUrl && 
   process.env.SUPABASE_SERVICE_ROLE_KEY &&
   !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('your_supabase')
@@ -42,3 +38,4 @@ export const supabaseAdmin = hasValidSupabaseConfig &&
       }
     )
   : null;
+if (!supabaseAdmin) console.warn('Supabase server configuration not available');

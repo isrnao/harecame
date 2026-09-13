@@ -51,3 +51,14 @@ test('LiveKit webhook validation binds the signature to the raw request body', a
   await assert.rejects(receiver.receive(body.replace('room_started', 'room_finished'), token));
   await assert.rejects(receiver.receive(body));
 });
+
+test('camera HTTP requests authenticate the event cookie without exposing it to JavaScript', async () => {
+  const { AuthService, requestActor, authorize } = await modules();
+  const token = await AuthService.generateCameraToken('camera-a', 'event-a');
+  const request = new Request('https://app.test', { headers: { cookie: `harecame-camera-event-a=${token}` } });
+  const actor = await requestActor(request, 'event-a');
+  assert.equal(actor?.type, 'camera');
+  assert.doesNotThrow(() => authorize(actor, ['camera'], 'event-a'));
+  assert.equal(await requestActor(request, 'event-b'), null);
+  assert.throws(() => authorize(actor, ['camera'], 'event-b'));
+});

@@ -25,7 +25,7 @@ export async function joinCameraAction(_previous: CameraJoinState, form: FormDat
     const deviceInfo = Object.fromEntries(['userAgent', 'screenResolution', 'connectionType', 'platform', 'browser'].map(k => [k, String(form.get(k) ?? '').slice(0, 500)]));
     const result = await admitCamera(actor, event.id, { participantName, deviceInfo });
     jar.set(key, token!, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/', maxAge: 28800 });
-    return { success: true, message: 'イベントに参加しました', ...result, authToken: token };
+    return { success: true, message: 'イベントに参加しました', ...result };
   } catch (error) {
     return { success: false, message: error instanceof AppError ? error.message : error instanceof z.ZodError ? '入力内容を確認してください' : 'カメラの参加に失敗しました' };
   }

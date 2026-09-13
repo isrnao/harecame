@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { StreamStatusService } from '@/lib/database';
 import { getPublicEvent } from '@/server/events';
-import { withErrorHandling } from '@/lib/middleware';
+import { withErrorHandling, rateLimit, RATE_LIMITS } from '@/lib/middleware';
+import { z } from 'zod';
 import { AppError } from '@/server/errors';
-export const GET = withErrorHandling(async (_request: NextRequest, context: { params: Promise<{ eventId: string }> }) => {
-  const { eventId } = await context.params;
+export const GET = withErrorHandling(async (request: NextRequest, context: { params: Promise<{ eventId: string }> }) => {
+  const eventId = z.uuid().parse((await context.params).eventId);
+  const limited = await rateLimit(RATE_LIMITS.default)(request); if (limited) return limited;
   const event = await getPublicEvent(eventId);
   if (!event) throw new AppError(404, 'イベントが見つかりません');
   const status = await StreamStatusService.getByEventId(eventId);

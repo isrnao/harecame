@@ -1,6 +1,7 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase';
+import { leaseHeartbeat } from './lease-heartbeat';
 import { AppError } from './errors';
 export type StreamPhase = 'idle' | 'preparing' | 'starting' | 'live' | 'stopping' | 'stopped' | 'failed';
 export interface StreamSession {
@@ -31,17 +32,27 @@ export async function withStreamLease<T>(eventId: string, work: (session: Stream
   const { data: locked, error } = await database().rpc('acquire_stream_lease', { p_event_id: eventId, p_token: token });
   if (error) throw new AppError(503, '配信制御DBに接続できません');
   if (!locked) throw new AppError(409, '配信処理中です。しばらく待って再確認してください');
+  const heartbeat = leaseHeartbeat(async () => {
+    const { data, error } = await database().from('stream_sessions')
+      .update({ lease_until: new Date(Date.now() + 120000).toISOString() }).eq('event_id', eventId)
+      .eq('lease_token', token).gt('lease_until', new Date().toISOString()).select('event_id').maybeSingle()
+      .abortSignal(AbortSignal.timeout(10000));
+    if (error || !data) throw new AppError(409, '配信処理のロックが失効しました');
+  });
   try {
     const session = await readSession(eventId);
     if (!session) throw new AppError(503, '配信状態が見つかりません');
     const save = async (patch: Partial<StreamSession>) => {
+      heartbeat.assertOwned();
       const { data, error } = await database().from('stream_sessions').update({ ...patch, lease_until: new Date(Date.now() + 120000).toISOString() }).eq('event_id', eventId)
-        .eq('lease_token', token).gt('lease_until', new Date().toISOString()).select('event_id').maybeSingle();
+        .eq('lease_token', token).gt('lease_until', new Date().toISOString()).select('event_id,updated_at').maybeSingle();
       if (error || !data) throw new AppError(409, '配信処理のロックが失効しました。状態を再確認してください');
-      Object.assign(session, patch);
+      heartbeat.assertOwned();
+      Object.assign(session, patch, { updated_at: data.updated_at });
     };
     return await work(session, save);
   } finally {
+    await heartbeat.stop();
     await database().from('stream_sessions').update({ lease_token: null, lease_until: null }).eq('event_id', eventId).eq('lease_token', token);
   }
 }

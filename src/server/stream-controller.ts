@@ -37,27 +37,28 @@ export async function reconcileStream({ session: s, event, layout, hasCamera, sa
     const running = outputs.filter(isRunning);
     if (s.desired === 'stopped') {
       await save({ phase: 'stopping', last_error: null });
-      // Recover creations whose responses were lost before stopping anything.
+      let shutdownError: unknown;
+      // A failed YouTube lookup must not prevent stopping billable Egress outputs.
       if (!s.broadcast_id && s.broadcast_creation_attempted) {
-        const found = await p.findBroadcast(marker);
-        if (!found) throw new AppError(409, 'YouTube作成結果が未確定です。状態確認を続けてください');
-        await save({ broadcast_id: found.id });
+        try {
+          const found = await p.findBroadcast(marker);
+          if (!found) throw new AppError(409, 'YouTube作成結果が未確定です。状態確認を続けてください');
+          await save({ broadcast_id: found.id });
+        } catch (error) { shutdownError = error; }
       }
       if (s.egress_creation_attempted && !s.egress_id && outputs.length === 0) {
-        throw new AppError(409, '配信出力の作成結果が未確定です。状態確認を続けてください');
+        shutdownError = new AppError(409, '配信出力の作成結果が未確定です。状態確認を続けてください');
       }
-      let shutdownError: unknown;
       if (s.broadcast_id) {
         try { await save({}); await p.completeBroadcast(s.broadcast_id); } catch (error) { shutdownError = error; }
       }
-      // One provider failing must not prevent stopping the other provider's billable resources.
-      for (const output of running) {
+      for (const output of running.filter(o => o.state !== 'ending')) {
         try { await save({}); await p.stopOutput(output.id); } catch (error) { shutdownError = error; }
       }
       outputs = await p.listOutputs();
       if (outputs.some(isRunning)) {
         if (shutdownError) throw shutdownError;
-        return; // Finalization is asynchronous.
+        return;
       }
       await save({});
       await p.closeRoom();
