@@ -1,5 +1,6 @@
+import { sessionActor, authorize } from '@/server/access';
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { after } from 'next/server';
 import { EventService, CameraConnectionService, StreamStatusService } from '@/lib/database';
@@ -46,6 +47,7 @@ export async function generateMetadata({ params }: DashboardPageProps): Promise<
   const { eventId } = await params;
 
   try {
+    authorize(await sessionActor(), ['organizer'], eventId);
     const event = await EventService.getById(eventId);
     if (!event) {
       return {
@@ -66,6 +68,9 @@ export async function generateMetadata({ params }: DashboardPageProps): Promise<
 
 export default async function EventDashboardPage({ params }: DashboardPageProps) {
   const { eventId } = await params;
+  const actor = await sessionActor();
+  if (!actor) redirect('/login');
+  try { authorize(actor, ['organizer'], eventId); } catch { notFound(); }
   const headersList = await headers();
 
   let event: Awaited<ReturnType<typeof EventService.getById>>;

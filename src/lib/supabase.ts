@@ -1,3 +1,4 @@
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,7 +19,7 @@ const isValidUrl = (url: string | undefined): boolean => {
 const hasValidSupabaseConfig = isValidUrl(supabaseUrl) && supabaseAnonKey && !supabaseAnonKey.includes('your_supabase');
 
 if (!hasValidSupabaseConfig) {
-  console.warn('Supabase configuration not available - using mock mode');
+  console.warn('Supabase configuration not available - database operations are unavailable');
 }
 
 export const supabase = hasValidSupabaseConfig && supabaseUrl && supabaseAnonKey

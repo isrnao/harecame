@@ -83,5 +83,5 @@ export default async function CameraStreamPage({
     }
   });
 
-  return <CameraStreamClient event={event} />;
+  return <CameraStreamClient event={{ id: event.id, title: event.title, description: event.description, status: event.status }} />;
 }

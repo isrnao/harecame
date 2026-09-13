@@ -1,122 +1,33 @@
-'use server';
-
+"use server";
 import { revalidatePath } from 'next/cache';
-import { EventService } from '@/lib/database';
-import { createYouTubeLiveStream } from '@/lib/youtube';
-
-// Form validation schema
+import { createEvent, deleteEvent, getPublicEvent } from '@/server/events';
+import { sessionActor } from '@/server/access';
+import { AppError } from '@/server/errors';
 import { z } from 'zod';
 
-const eventCreationSchema = z.object({
-  title: z.string().min(1, 'イベント名は必須です').max(255, 'イベント名は255文字以内で入力してください'),
-  description: z.string().max(1000, '説明は1000文字以内で入力してください').optional(),
-  scheduledAt: z.string().optional().transform((val) => val ? new Date(val) : undefined),
-});
-
-export type EventCreationState = {
-  success: boolean;
-  message: string;
-  errors?: {
-    title?: string[];
-    description?: string[];
-    scheduledAt?: string[];
-  };
-  eventId?: string;
-};
-
-export async function createEventAction(
-  prevState: EventCreationState,
-  formData: FormData
-): Promise<EventCreationState> {
+export type EventCreationState = { success: boolean; message: string; eventId?: string;
+  errors?: { title?: string[]; description?: string[]; scheduledAt?: string[] } };
+export async function createEventAction(_previous: EventCreationState, form: FormData): Promise<EventCreationState> {
   try {
-    // Extract form data
-    const rawData = {
-      title: formData.get('title') as string,
-      description: formData.get('description') as string,
-      scheduledAt: formData.get('scheduledAt') as string,
-    };
-
-    // Validate form data
-    const validationResult = eventCreationSchema.safeParse(rawData);
-    
-    if (!validationResult.success) {
-      return {
-        success: false,
-        message: '入力内容に誤りがあります',
-        errors: validationResult.error.flatten().fieldErrors,
-      };
-    }
-
-    const { title, description, scheduledAt } = validationResult.data;
-
-    // Create event in database
-    const event = await EventService.create({
-      title,
-      description: description || undefined,
-      scheduledAt,
-    });
-
-    // Create YouTube Live stream
-    try {
-      const youtubeStream = await createYouTubeLiveStream({
-        title: event.title,
-        description: event.description,
-        scheduledStartTime: event.scheduledAt,
-        privacy: 'unlisted', // Default to unlisted for privacy
-      });
-
-      // Update event with YouTube stream information
-      await EventService.update(event.id, {
-        youtubeStreamUrl: youtubeStream.streamUrl,
-        youtubeStreamKey: youtubeStream.streamKey,
-        youtubeVideoId: youtubeStream.id,
-      });
-    } catch (youtubeError) {
-      console.error('Failed to create YouTube stream:', youtubeError);
-      // Continue without YouTube integration for now
-    }
-
-    // Revalidate the events page
+    const scheduled = form.get('scheduledAt');
+    const date = scheduled ? new Date(String(scheduled)) : undefined;
+    if (date && Number.isNaN(date.getTime())) throw new AppError(400, '開催日時を確認してください');
+    const event = await createEvent(await sessionActor(), { title: form.get('title'),
+      description: form.get('description') || undefined, scheduledAt: date?.toISOString() });
     revalidatePath('/events');
-    
-    return {
-      success: true,
-      message: 'イベントが正常に作成されました',
-      eventId: event.id,
-    };
+    return { success: true, message: 'イベントを作成しました', eventId: event.id };
   } catch (error) {
-    console.error('Failed to create event:', error);
-    return {
-      success: false,
-      message: 'イベントの作成に失敗しました。もう一度お試しください。',
-    };
+    return { success: false, message: error instanceof AppError ? error.message : 'イベントの作成に失敗しました',
+      ...(error instanceof z.ZodError && { errors: error.flatten().fieldErrors }) };
   }
 }
-
-export async function getEventById(eventId: string) {
+export async function getEventById(id: string) { return getPublicEvent(id); }
+export async function deleteEventAction(id: string) {
   try {
-    const event = await EventService.getById(eventId);
-    return event;
-  } catch (error) {
-    console.error('Failed to get event:', error);
-    return null;
-  }
-}
-
-export async function deleteEventAction(eventId: string): Promise<{ success: boolean; message: string }> {
-  try {
-    await EventService.delete(eventId);
+    await deleteEvent(await sessionActor(), id);
     revalidatePath('/events');
-    
-    return {
-      success: true,
-      message: 'イベントが削除されました',
-    };
+    return { success: true, message: 'イベントを削除しました' };
   } catch (error) {
-    console.error('Failed to delete event:', error);
-    return {
-      success: false,
-      message: 'イベントの削除に失敗しました',
-    };
+    return { success: false, message: error instanceof AppError ? error.message : '削除に失敗しました' };
   }
 }

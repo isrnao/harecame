@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { EventService } from '@/lib/database';
+import { listEvents } from '@/server/events';
+import { sessionActor } from '@/server/access';
+import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Calendar, Users, Video } from 'lucide-react';
@@ -15,10 +17,12 @@ export const metadata: Metadata = {
 };
 
 export default async function EventsPage() {
-  let events: Awaited<ReturnType<typeof EventService.list>> = [];
+  const actor = await sessionActor();
+  if (!actor || !['admin', 'organizer'].includes(actor.type)) redirect('/login');
+  let events: Awaited<ReturnType<typeof listEvents>> = [];
 
   try {
-    events = await EventService.list({ limit: 20 });
+    events = await listEvents(actor, { limit: 20 });
   } catch (error) {
     console.error('Failed to load events:', error);
     events = [];

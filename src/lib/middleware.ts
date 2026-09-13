@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { AppError } from '@/server/errors';
 import { formatValidationErrors, generateCSPHeader } from './validation';
 
 // Rate limiting store (in production, use Redis or similar)
@@ -86,7 +87,7 @@ export function rateLimit(config: RateLimitConfig) {
 function getDefaultKey(request: NextRequest): string {
   const ip = request.headers.get('x-forwarded-for') || 'unknown';
   const userAgent = request.headers.get('user-agent') || 'unknown';
-  return `${ip}:${hashString(userAgent)}`;
+  return `${request.method}:${new URL(request.url).pathname}:${ip}:${hashString(userAgent)}`;
 }
 
 // Simple hash function for user agent
@@ -212,33 +213,6 @@ export function securityHeaders(): Record<string, string> {
   };
 }
 
-// Authentication middleware (simple token-based)
-export function requireAuth(request: NextRequest): NextResponse | null {
-  const authHeader = request.headers.get('authorization');
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return NextResponse.json(
-      { success: false, error: 'Authentication required' },
-      { status: 401 }
-    );
-  }
-  
-  const token = authHeader.substring(7);
-  
-  // In a real application, validate the JWT token here
-  // For now, we'll use a simple admin token check
-  const adminToken = process.env.ADMIN_TOKEN;
-  
-  if (adminToken && token !== adminToken) {
-    return NextResponse.json(
-      { success: false, error: 'Invalid authentication token' },
-      { status: 401 }
-    );
-  }
-  
-  return null; // Allow request
-}
-
 // Middleware composer
 export function composeMiddleware(...middlewares: Array<(request: NextRequest) => Promise<NextResponse | null> | NextResponse | null>) {
   return async (request: NextRequest): Promise<NextResponse | null> => {
@@ -260,7 +234,9 @@ export function withErrorHandling<T extends unknown[]>(
     try {
       return await handler(...args);
     } catch (error) {
-      console.error('API Error:', error);
+      if (error instanceof AppError) return NextResponse.json({ success: false, error: error.message }, { status: error.status, headers: { 'Cache-Control': 'no-store' } });
+      if (error instanceof z.ZodError || error instanceof SyntaxError) return NextResponse.json({ success: false, error: '入力内容を確認してください' }, { status: 400 });
+      console.error('API request failed');
       
       // Log error for monitoring
       if (process.env.NODE_ENV === 'production') {
@@ -272,9 +248,7 @@ export function withErrorHandling<T extends unknown[]>(
         {
           success: false,
           error: 'Internal server error',
-          ...(process.env.NODE_ENV === 'development' && {
-            details: error instanceof Error ? error.message : 'Unknown error',
-          }),
+
         },
         { status: 500 }
       );

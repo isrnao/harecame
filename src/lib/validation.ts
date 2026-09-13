@@ -2,19 +2,15 @@ import { z } from 'zod';
 
 // Event validation schemas
 export const createEventSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(255, 'Title too long'),
+  title: z.string().trim().min(1, 'Title is required').max(255, 'Title too long'),
   description: z.string().max(1000, 'Description too long').optional(),
   scheduledAt: z.string().datetime().optional(),
 });
 
 export const updateEventSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(255, 'Title too long').optional(),
+  title: z.string().trim().min(1, 'Title is required').max(255, 'Title too long').optional(),
   description: z.string().max(1000, 'Description too long').optional(),
   scheduledAt: z.string().datetime().optional(),
-  status: z.enum(['scheduled', 'live', 'ended']).optional(),
-  youtubeStreamUrl: z.string().url().optional(),
-  youtubeStreamKey: z.string().optional(),
-  youtubeVideoId: z.string().optional(),
 });
 
 // Camera connection validation schemas
@@ -51,7 +47,7 @@ export const updateStreamStatusSchema = z.object({
 
 // Participation code validation
 export const participationCodeSchema = z.object({
-  code: z.string().length(6, 'Participation code must be 6 characters').regex(/^[A-Z0-9]+$/, 'Invalid participation code format'),
+  code: z.string().trim().toUpperCase().length(6, 'Participation code must be 6 characters').regex(/^[A-Z0-9]+$/, 'Invalid participation code format'),
 });
 
 // Query parameter validation schemas
