@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { formatValidationErrors, generateCSPHeader } from './validation';
+import { AppError } from '@/server/errors';
+import { browserPolicy } from './browser-policy';
+import { clientAddress } from './client-address';
+import { formatValidationErrors } from './validation';
 
 // Rate limiting store (in production, use Redis or similar)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
@@ -82,22 +85,10 @@ export function rateLimit(config: RateLimitConfig) {
   };
 }
 
-// Default key generator (IP + User-Agent hash)
+// Normalize resource IDs so changing a URL cannot create unlimited buckets.
 function getDefaultKey(request: NextRequest): string {
-  const ip = request.headers.get('x-forwarded-for') || 'unknown';
-  const userAgent = request.headers.get('user-agent') || 'unknown';
-  return `${ip}:${hashString(userAgent)}`;
-}
-
-// Simple hash function for user agent
-function hashString(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  return Math.abs(hash).toString(36);
+  const pathname = new URL(request.url).pathname.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, ':id');
+  return `${request.method}:${pathname}:${clientAddress(request.headers)}`;
 }
 
 // Cleanup expired rate limit entries
@@ -185,59 +176,7 @@ export function corsMiddleware(request: NextRequest): NextResponse | null {
 }
 
 // Security headers middleware
-export function securityHeaders(): Record<string, string> {
-  return {
-    // Content Security Policy
-    'Content-Security-Policy': generateCSPHeader(),
-    
-    // Prevent MIME type sniffing
-    'X-Content-Type-Options': 'nosniff',
-    
-    // Prevent clickjacking
-    'X-Frame-Options': 'DENY',
-    
-    // XSS protection
-    'X-XSS-Protection': '1; mode=block',
-    
-    // Referrer policy
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    
-    // Permissions policy
-    'Permissions-Policy': 'camera=self, microphone=self, geolocation=(), payment=()',
-    
-    // HSTS (only in production with HTTPS)
-    ...(process.env.NODE_ENV === 'production' && {
-      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
-    }),
-  };
-}
-
-// Authentication middleware (simple token-based)
-export function requireAuth(request: NextRequest): NextResponse | null {
-  const authHeader = request.headers.get('authorization');
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return NextResponse.json(
-      { success: false, error: 'Authentication required' },
-      { status: 401 }
-    );
-  }
-  
-  const token = authHeader.substring(7);
-  
-  // In a real application, validate the JWT token here
-  // For now, we'll use a simple admin token check
-  const adminToken = process.env.ADMIN_TOKEN;
-  
-  if (adminToken && token !== adminToken) {
-    return NextResponse.json(
-      { success: false, error: 'Invalid authentication token' },
-      { status: 401 }
-    );
-  }
-  
-  return null; // Allow request
-}
+export function securityHeaders(): Record<string, string> { return browserPolicy(); }
 
 // Middleware composer
 export function composeMiddleware(...middlewares: Array<(request: NextRequest) => Promise<NextResponse | null> | NextResponse | null>) {
@@ -260,7 +199,9 @@ export function withErrorHandling<T extends unknown[]>(
     try {
       return await handler(...args);
     } catch (error) {
-      console.error('API Error:', error);
+      if (error instanceof AppError) return NextResponse.json({ success: false, error: error.message }, { status: error.status, headers: { 'Cache-Control': 'no-store' } });
+      if (error instanceof z.ZodError || error instanceof SyntaxError) return NextResponse.json({ success: false, error: '入力内容を確認してください' }, { status: 400 });
+      console.error('API request failed', { type: error instanceof Error ? error.name : typeof error });
       
       // Log error for monitoring
       if (process.env.NODE_ENV === 'production') {
@@ -272,9 +213,7 @@ export function withErrorHandling<T extends unknown[]>(
         {
           success: false,
           error: 'Internal server error',
-          ...(process.env.NODE_ENV === 'development' && {
-            details: error instanceof Error ? error.message : 'Unknown error',
-          }),
+
         },
         { status: 500 }
       );

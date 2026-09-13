@@ -1,3 +1,5 @@
+import { authorize, requestActor } from '@/server/access';
+import { AppError } from '@/server/errors';
 import { NextRequest, NextResponse } from 'next/server';
 import { CameraConnectionService, EventLogService } from '@/lib/database';
 import { 
@@ -27,6 +29,8 @@ export const PUT = withErrorHandling(async (
   if (rateLimitResult) return rateLimitResult;
 
   const { eventId, cameraId } = await params;
+  const actor = await requestActor(request);
+  authorize(actor, ['organizer', 'camera'], eventId);
   
   // Validate UUID formats
   if (!isValidUUID(eventId) || !isValidUUID(cameraId)) {
@@ -75,6 +79,7 @@ export const PUT = withErrorHandling(async (
     );
   }
 
+  if (actor.type === 'camera' && currentCamera.participantId !== actor.sub) throw new AppError(403, '別のカメラは操作できません');
   const previousStatus = currentCamera.status;
 
   // Update camera connection status

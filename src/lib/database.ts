@@ -1,5 +1,8 @@
 // Database CRUD operations for Harecame application
-import { supabase, supabaseAdmin } from './supabase';
+import 'server-only';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { supabaseAdmin } from './supabase';
+const supabase = supabaseAdmin;
 import type { 
   Event, 
   CameraConnection, 
@@ -20,7 +23,6 @@ export function dbEventToClient(event: Event): EventClient {
     status: event.status,
     participationCode: event.participation_code,
     youtubeStreamUrl: event.youtube_stream_url,
-    youtubeStreamKey: event.youtube_stream_key,
     youtubeVideoId: event.youtube_video_id,
     livekitRoomName: event.livekit_room_name,
     createdAt: event.created_at,
@@ -85,8 +87,8 @@ export class EventService {
     }
 
     // Generate unique participation code
-    const participationCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const livekitRoomName = `event_${Date.now()}_${participationCode}`;
+    const participationCode = randomBytes(3).toString('hex').toUpperCase();
+    const livekitRoomName = `event_${randomUUID()}`;
 
     const { data, error } = await supabaseAdmin
       .from('events')
@@ -362,19 +364,16 @@ export class StreamStatusService {
       throw new Error('Supabase admin client not configured');
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('stream_status')
-      .upsert({
-        event_id: statusData.eventId,
-        is_live: statusData.isLive ?? false,
-        active_camera_count: statusData.activeCameraCount ?? 0,
+    const { data, error } = await supabaseAdmin.rpc('patch_stream_status', {
+      p_event_id: statusData.eventId,
+      p_patch: Object.fromEntries(Object.entries({
+        is_live: statusData.isLive,
+        active_camera_count: statusData.activeCameraCount,
         current_active_camera: statusData.currentActiveCamera,
-        youtube_viewer_count: statusData.youtubeViewerCount ?? 0,
-        stream_health: statusData.streamHealth ?? 'unknown',
-        updated_at: new Date(),
-      })
-      .select()
-      .single();
+        youtube_viewer_count: statusData.youtubeViewerCount,
+        stream_health: statusData.streamHealth,
+      }).filter(([, value]) => value !== undefined)),
+    });
 
     if (error) {
       throw new Error(`Failed to upsert stream status: ${error.message}`);

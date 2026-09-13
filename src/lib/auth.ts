@@ -1,3 +1,4 @@
+import 'server-only';
 import { SignJWT, jwtVerify } from "jose";
 import { NextRequest, NextResponse } from "next/server";
 import { EventService } from "./database";
@@ -184,8 +185,13 @@ export class AuthService {
       const { payload } = await jwtVerify(token, JWT_SECRET, {
         issuer: JWT_ISSUER,
         audience: JWT_AUDIENCE,
+        algorithms: ["HS256"],
       });
 
+      if (typeof payload.sub !== 'string' || !payload.sub ||
+          !['admin', 'organizer', 'camera', 'viewer'].includes(String(payload.type)) ||
+          typeof payload.exp !== 'number') return null;
+      if (payload.type !== 'admin' && typeof payload.eventId !== 'string') return null;
       return payload as JWTPayload;
     } catch (error) {
       console.error("Token verification failed:", error);
@@ -200,7 +206,7 @@ export class AuthService {
     const authHeader = request.headers.get("authorization");
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return null;
+      return SessionService.extractSessionToken(request);
     }
 
     return authHeader.substring(7);
@@ -492,7 +498,7 @@ export class SessionService {
 
     return `${
       this.SESSION_COOKIE_NAME
-    }=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Expires=${expires.toUTCString()}`;
+    }=${token}; HttpOnly; ${process.env.NODE_ENV === 'production' ? 'Secure; ' : ''}SameSite=Strict; Path=/; Expires=${expires.toUTCString()}`;
   }
 
   /**
@@ -522,6 +528,6 @@ export class SessionService {
    * Clear session cookie
    */
   static clearSessionCookie(): string {
-    return `${this.SESSION_COOKIE_NAME}=; HttpOnly; Secure; SameSite=Strict; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    return `${this.SESSION_COOKIE_NAME}=; HttpOnly; ${process.env.NODE_ENV === 'production' ? 'Secure; ' : ''}SameSite=Strict; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
   }
 }

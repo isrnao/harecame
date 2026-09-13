@@ -1,15 +1,19 @@
+import { sessionActor } from '@/server/access';
+import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { EventCreationForm } from '@/components/events/EventCreationForm';
 
 // Next.js 15: 静的ルート最適化のためのdynamic設定
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'イベント作成 - Harecame',
   description: '新しいライブ配信イベントを作成します',
 };
 
-export default function CreateEventPage() {
+export default async function CreateEventPage() {
+  const actor = await sessionActor();
+  if (actor?.type !== 'admin') redirect('/login');
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="mb-8">

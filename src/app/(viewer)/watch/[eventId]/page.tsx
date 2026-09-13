@@ -6,7 +6,7 @@ import { getEventById } from '@/app/actions/events';
 
 // Next.js 15: App Router専用の最適化設定
 export const dynamic = 'force-dynamic'; // 動的パラメータとリアルタイムストリームのため
-export const runtime = 'edge'; // 視聴者向けページはエッジランタイムで高速化
+export const runtime = 'nodejs'; // 視聴者向けページはDBとサーバーSDKを使うためNode.jsで実行
 export const revalidate = 60; // 1分間隔でイベント情報を再検証
 
 interface ViewerPageProps {

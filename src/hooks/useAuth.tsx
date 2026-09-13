@@ -90,14 +90,8 @@ class AuthStore {
     return this.cachedSnapshot;
   };
 
-  getServerSnapshot = () => {
-    // Server-side snapshot (no user authenticated)
-    return {
-      user: null,
-      isLoading: false,
-      error: null,
-    };
-  };
+  private serverSnapshot: AuthState = { user: null, isLoading: false, error: null };
+  getServerSnapshot = () => this.serverSnapshot;
 
   setUser = (user: AuthUser | null) => {
     if (user) {
