@@ -33,7 +33,7 @@ export async function reconcileEvent(eventId: string, command?: z.infer<typeof s
     const youtube = new YouTubeProvider();
     const cameras = await CameraConnectionService.getByEventId(eventId);
     if (command?.action === 'start' || command?.action === 'select') {
-      if (event.status === 'ended' || session.phase === 'stopped' || session.desired === 'stopped' && command.action === 'select') throw new AppError(409, '新しいイベントから配信を開始してください');
+      if (event.status === 'ended' || session.phase === 'stopped' || session.phase === 'stopping' || session.desired === 'stopped' && command.action === 'select') throw new AppError(409, '新しいイベントから配信を開始してください');
       const ids = [command.cameraId, command.fallbackCameraId].filter(Boolean);
       if (ids.some(id => !cameras.some(c => c.id === id))) throw new AppError(403, 'このイベントのカメラを選択してください');
       if (command.cameraId === command.fallbackCameraId) throw new AppError(400, 'メインと予備には異なるカメラを選択してください');
@@ -86,9 +86,13 @@ export async function reconcileEvent(eventId: string, command?: z.infer<typeof s
         await reconcileStream({ session, event, layout, hasCamera: !!current, save, ports });
       }
     } finally {
-      await StreamStatusService.upsert({ eventId, isLive: session.phase === 'live',
+      let viewers: number | undefined;
+      if (session.phase === 'live' && session.broadcast_id) {
+        try { viewers = await youtube.viewers(session.broadcast_id); } catch { /* Metrics failure must not stop the program. */ }
+      }
+      await StreamStatusService.upsert({ eventId, youtubeViewerCount: viewers, isLive: session.phase === 'live',
         activeCameraCount: publishing.size, currentActiveCamera: current?.id ?? null,
-        streamHealth: session.phase === 'failed' ? 'critical' : session.phase === 'live' ? 'good' : 'unknown' });
+        streamHealth: session.phase === 'failed' ? 'critical' : session.phase === 'live' ? current ? 'good' : 'poor' : 'unknown' });
       if (session.broadcast_id) await EventService.update(eventId, {
         youtubeVideoId: session.broadcast_id, youtubeStreamUrl: `https://www.youtube.com/watch?v=${session.broadcast_id}`,
       });
@@ -107,7 +111,7 @@ export async function getControlState(actor: Actor | null, eventId: string) {
 }
 export async function reconcilePending() {
   const { data, error } = await database().from('stream_sessions').select('event_id')
-    .not('phase', 'in', '(idle,stopped)').order('updated_at').limit(10);
+    .not('phase', 'in', '(idle,stopped)').order('updated_at').limit(3);
   if (error) throw new AppError(503, '処理対象の取得に失敗しました');
   const results = [];
   for (const row of data ?? []) {

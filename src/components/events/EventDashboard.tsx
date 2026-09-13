@@ -4,7 +4,6 @@ import { useEffect, useCallback, useRef, startTransition, useReducer, useMemo, u
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -12,8 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  Play,
-  Square,
   Eye,
   Video,
   Wifi,
@@ -65,22 +62,7 @@ function dashboardReducer(state: DashboardState, action: DashboardAction): Dashb
     case 'UPDATE_DATA': {
       const { cameras, streamStatus, youtubeStats } = action.payload;
 
-      // activeCameraの計算をreducer内で実行
-      const activeCameras = cameras.filter((camera) => camera.status === "active");
-      let newActiveCamera: CameraConnectionClient | null = null;
-
-      if (activeCameras.length > 0) {
-        const mostRecent = activeCameras.reduce((latest, current) => {
-          return new Date(current.joinedAt) > new Date(latest.joinedAt) ? current : latest;
-        });
-
-        // 現在のactiveCameraと同じ場合は変更しない（参照の安定性）
-        if (state.activeCamera && state.activeCamera.id === mostRecent.id) {
-          newActiveCamera = state.activeCamera;
-        } else {
-          newActiveCamera = mostRecent;
-        }
-      }
+      const newActiveCamera = cameras.find(camera => camera.id === streamStatus?.currentActiveCamera) ?? null;
 
       return {
         ...state,
@@ -226,7 +208,7 @@ export function EventDashboard({
             console.error('Auto-refresh failed:', error);
           }
         }
-      }, 30000);
+      }, 10000);
     };
 
     setupInterval();
@@ -423,9 +405,9 @@ export function EventDashboard({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {youtubeStats?.duration || "00:00:00"}
+              {youtubeStats?.duration || "—"}
             </div>
-            <p className="text-xs text-muted-foreground">経過時間</p>
+            <p className="text-xs text-muted-foreground">YouTubeで配信時間を確認</p>
           </CardContent>
         </Card>
       </div>
@@ -528,47 +510,6 @@ export function EventDashboard({
         activeCamera={activeCamera}
         onActiveCameraChange={(camera) => dispatch({ type: 'SET_ACTIVE_CAMERA', payload: camera })}
       />
-
-      {/* Stream Controls - モバイル最適化 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg sm:text-xl">配信コントロール</CardTitle>
-          <CardDescription className="text-sm">
-            配信の開始・停止を管理します
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button
-              variant={streamStatus?.isLive ? "secondary" : "default"}
-              disabled={streamStatus?.isLive || activeCameras.length === 0}
-              className="min-h-[48px] touch-manipulation flex-1 sm:flex-none"
-            >
-              <Play className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">配信開始</span>
-              <span className="sm:hidden">開始</span>
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={!streamStatus?.isLive}
-              className="min-h-[48px] touch-manipulation flex-1 sm:flex-none"
-            >
-              <Square className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">配信停止</span>
-              <span className="sm:hidden">停止</span>
-            </Button>
-          </div>
-
-          {activeCameras.length === 0 && (
-            <Alert className="mt-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="text-sm">
-                配信を開始するには、少なくとも1台のカメラが接続されている必要があります。
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Last Updated */}
       {lastUpdated && (

@@ -11,6 +11,7 @@ const createJestConfig = nextJest({
 const customJestConfig = {
   setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
   testEnvironment: "jsdom",
+  testEnvironmentOptions: { url: "http://localhost:3000" },
   testMatch: [
     "**/__tests__/**/*.(ts|tsx|js)",
     "**/*.(test|spec).(ts|tsx|js)",

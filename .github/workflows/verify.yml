@@ -1,0 +1,32 @@
+name: Verify
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      JWT_SECRET: ci-only-signing-secret-not-for-deployment-32chars
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-only-anon
+      NEXT_PUBLIC_LIVEKIT_URL: ws://127.0.0.1:7880
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm type-check
+      - run: pnpm lint
+      - run: pnpm test --runInBand --watchman=false --silent
+      - run: pnpm test:server
+      - run: pnpm build
+      - run: pnpm verify:static-routes

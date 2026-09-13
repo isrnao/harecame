@@ -90,12 +90,7 @@ export function AdminLoginForm({ onSuccess, eventId }: AdminLoginFormProps) {
           </Button>
         </form>
 
-        <div className="mt-4 text-sm text-gray-600 text-center">
-          <p>管理者キーは環境変数で設定されています</p>
-          <p className="text-xs mt-1">
-            開発環境では <code className="bg-gray-100 px-1 rounded">ADMIN_KEY</code> を確認してください
-          </p>
-        </div>
+
       </CardContent>
     </Card>
   );

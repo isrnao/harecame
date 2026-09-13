@@ -37,7 +37,7 @@ export class YouTubeProvider {
     let pageToken = '';
     do {
       const result = await this.request<{ items: T[]; nextPageToken?: string }>(resource, {
-        part: 'id,snippet,cdn'.replace(resource === 'liveBroadcasts' ? ',cdn' : '__unused__', ''),
+        part: resource === 'liveBroadcasts' ? 'id,snippet' : 'id,snippet,cdn',
         mine: 'true', maxResults: '50', ...(pageToken && { pageToken }),
       });
       const found = result.items.find(item => item.snippet.description?.includes(marker));

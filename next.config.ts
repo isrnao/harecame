@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['@livekit/components-react', 'lucide-react'],
   },
 
+  outputFileTracingRoot: process.cwd(),
+
   // Next.js 15: Pages Router も一括バンドル
   bundlePagesRouterDependencies: true,
 
@@ -16,21 +18,9 @@ const nextConfig: NextConfig = {
 
   // Performance optimizations
   compiler: {
-    // Remove console.log in production
-    removeConsole: process.env.NODE_ENV === 'production' ? {
-      exclude: ['error', 'warn'],
-    } : false,
+    // The LiveKit recorder uses START_RECORDING/END_RECORDING console signals.
+    removeConsole: false,
   },
-
-  // Bundle analyzer (enable with ANALYZE=true)
-  ...(process.env.ANALYZE === 'true' && {
-    webpack: (config: unknown) => {
-      const webpackConfig = config as { plugins: unknown[] };
-      const { BundleAnalyzerPlugin } = require('@next/bundle-analyzer')();
-      webpackConfig.plugins.push(new BundleAnalyzerPlugin());
-      return webpackConfig;
-    },
-  }),
 
   // Image optimization
   images: {
@@ -81,7 +71,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=0, must-revalidate',
+            value: 'private, no-store',
           },
         ],
       },
@@ -89,4 +79,7 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true', openAnalyzer: false,
+});
+export default withBundleAnalyzer(nextConfig);

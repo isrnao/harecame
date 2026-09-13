@@ -89,27 +89,5 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  // パフォーマンス統計の取得（管理者用）
-  try {
-    // 本番環境では実際の統計データを返す
-    const mockStats = {
-      averageMetrics: {
-        LCP: 2500,
-        INP: 200, // INPの平均値
-        CLS: 0.1,
-        FCP: 1800,
-        TTFB: 800,
-      },
-      sampleCount: 100,
-      lastUpdated: new Date().toISOString(),
-    };
-
-    return NextResponse.json(mockStats);
-  } catch (error) {
-    console.error('Error fetching performance stats:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json({ success: false, error: '分析基盤は未設定です' }, { status: 501 });
 }

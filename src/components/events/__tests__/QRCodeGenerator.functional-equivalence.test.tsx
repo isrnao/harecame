@@ -11,12 +11,6 @@ jest.mock('qrcode', () => ({
 import QRCode from 'qrcode';
 const mockToDataURL = QRCode.toDataURL as jest.MockedFunction<typeof QRCode.toDataURL>;
 
-// window.location をモック
-delete (window as any).location;
-(window as any).location = {
-  origin: 'http://localhost:3000',
-};
-
 // Next.js Image コンポーネントをモック
 interface MockImageProps {
   src: string;
@@ -47,7 +41,7 @@ jest.mock('next/image', () => {
 const mockEvent: EventClient = {
   id: 'test-event-id',
   title: 'テストイベント',
-  participationCode: 'TEST123',
+  participationCode: 'TEST12',
   status: 'live',
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -68,7 +62,7 @@ describe('QRCodeGenerator - 機能的等価性テスト', () => {
       // cameraJoinUrlが正しく計算されることを確認
       await waitFor(() => {
         expect(mockToDataURL).toHaveBeenCalledWith(
-          expect.stringContaining('camera/join?code=TEST123'),
+          expect.stringContaining('camera/join?code=TEST12'),
           expect.any(Object)
         );
       });
@@ -80,7 +74,7 @@ describe('QRCodeGenerator - 機能的等価性テスト', () => {
       // 基本的な表示要素が存在することを確認
       expect(screen.getByText('参加用QRコード')).toBeInTheDocument();
       expect(screen.getByText('テストイベント')).toBeInTheDocument();
-      expect(screen.getByText('TEST123')).toBeInTheDocument();
+      expect(screen.getByText('TEST12')).toBeInTheDocument();
 
       // QRコードが生成されるまで待機
       await waitFor(() => {
@@ -90,7 +84,7 @@ describe('QRCodeGenerator - 機能的等価性テスト', () => {
       });
 
       // 参加URLが正しく表示されることを確認
-      const urlInput = screen.getByDisplayValue(/camera\/join\?code=TEST123/);
+      const urlInput = screen.getByDisplayValue(/camera\/join\?code=TEST12/);
       expect(urlInput).toBeInTheDocument();
     });
 

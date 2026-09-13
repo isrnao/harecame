@@ -9,15 +9,10 @@ jest.mock('qrcode', () => ({
 
 // モック関数への参照を取得
 import QRCode from 'qrcode';
-import { createMockLocation, createMockQRCodeToDataURL, type MockWindow } from '@/lib/type-guards';
+import { createMockQRCodeToDataURL } from '@/lib/type-guards';
 
 const mockToDataURL = createMockQRCodeToDataURL();
 (QRCode.toDataURL as any) = mockToDataURL;
-
-// window.location をモック
-const mockWindow = window as MockWindow;
-delete mockWindow.location;
-mockWindow.location = createMockLocation();
 
 // Next.js Image コンポーネントをモック
 interface MockImageProps {
@@ -53,7 +48,7 @@ jest.mock('next/image', () => {
 const mockEvent: EventClient = {
   id: 'test-event-id',
   title: 'テストイベント',
-  participationCode: 'TEST123',
+  participationCode: 'TEST12',
   status: 'live',
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -119,7 +114,7 @@ describe('QRCodeGenerator', () => {
 
       // priority 属性が設定されていることを確認（重要な画像として扱われる）
       // Next.js Image コンポーネントでは priority={true} として渡される
-      expect(image).toHaveAttribute('priority');
+      expect(image).toHaveAttribute('data-priority', 'true');
     });
   });
 
@@ -217,7 +212,7 @@ describe('QRCodeGenerator', () => {
 
       // QRCode.toDataURL が適切なオプションで呼び出されることを確認
       expect(mockToDataURL).toHaveBeenCalledWith(
-        expect.stringContaining('/camera/join?code=TEST123'),
+        expect.stringContaining('/camera/join?code=TEST12'),
         expect.objectContaining({
           width: 256,
           margin: 2,

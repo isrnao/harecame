@@ -76,7 +76,7 @@ export class ErrorBoundary extends Component<Props, State> {
         errorBoundaryStack: isErrorInfo(errorInfo) ? errorInfo.errorBoundaryStack : undefined,
         timestamp: new Date().toISOString(),
         userAgent: navigator.userAgent,
-        url: window.location.href,
+        url: window.location.origin + window.location.pathname,
         errorId: this.state.errorId,
       };
 
@@ -106,7 +106,7 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   private handleGoHome = () => {
-    window.location.href = "/";
+    window.location.assign("/");
   };
 
   override render() {
