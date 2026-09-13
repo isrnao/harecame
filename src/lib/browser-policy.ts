@@ -1,7 +1,7 @@
 // Compatible with the Edge middleware and Node route handlers.
 export function browserPolicy(production = process.env.NODE_ENV === 'production'): Record<string, string> {
   const csp = [
-    "default-src 'self'", "script-src 'self' 'unsafe-inline'" + (production ? '' : " 'unsafe-eval'"),
+    "default-src 'self'", `script-src 'self' 'unsafe-inline'${production ? '' : " 'unsafe-eval'"}`,
     "style-src 'self' 'unsafe-inline'", "font-src 'self' data:", "img-src 'self' data: https: blob:",
     "media-src 'self' https: blob:", "connect-src 'self' https: wss: ws:",
     "frame-src https://www.youtube.com https://www.youtube-nocookie.com", "worker-src 'self' blob:",
